@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#151b25">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="mobile-web-app-capable" content="yes">
+<title>승강기 주행 계측</title>
+<style>
+  :root{
+    --bg:#151b25; --panel:#1d2532; --line:#2b3648; --ink:#e8edf5; --dim:#8d9ab0;
+    --acc:#f2b33d; --vel:#5cc8ff; --jrk:#ff7d6e; --ok:#63d39a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;-webkit-user-select:none;user-select:none}
+  body{padding:env(safe-area-inset-top) 14px calc(env(safe-area-inset-bottom) + 14px);max-width:520px;margin:0 auto;display:flex;flex-direction:column;min-height:100dvh;gap:12px}
+  header{display:flex;align-items:baseline;justify-content:space-between;padding-top:12px}
+  header h1{font-size:17px;font-weight:600;margin:0;letter-spacing:-.01em}
+  header span{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .readouts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .ro{background:var(--panel);border-radius:10px;padding:12px 10px 10px;border-top:3px solid var(--c)}
+  .ro .k{font-size:12px;color:var(--dim)}
+  .ro .v{font-size:30px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.15;margin-top:2px;color:var(--c)}
+  .ro .u{font-size:11px;color:var(--dim)}
+  .ro .p{font-size:12px;color:var(--ink);margin-top:6px;font-variant-numeric:tabular-nums}
+  .ro .p em{font-style:normal;color:var(--dim)}
+  canvas{width:100%;height:230px;background:var(--panel);border-radius:10px;display:block}
+  .stats{background:var(--panel);border-radius:10px;padding:10px 12px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-variant-numeric:tabular-nums}
+  .stats b{font-weight:500;color:var(--dim)}
+  .row{display:flex;gap:8px;align-items:center}
+  .row label{font-size:12px;color:var(--dim)}
+  select{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px}
+  .spacer{flex:1}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:auto}
+  button{border:0;border-radius:12px;padding:16px;font-size:16px;font-weight:600;color:var(--bg);background:var(--ink);font-family:inherit}
+  button.main{grid-column:1 / -1;background:var(--acc)}
+  button.main.stop{background:var(--jrk)}
+  button.sub{background:var(--panel);color:var(--ink);border:1px solid var(--line);font-weight:500;font-size:14px;padding:12px}
+  button:disabled{opacity:.4}
+  button:focus-visible{outline:2px solid var(--vel);outline-offset:2px}
+  #msg{font-size:13px;color:var(--dim);min-height:18px;text-align:center}
+  #msg.ok{color:var(--ok)} #msg.err{color:var(--jrk)}
+  .legend{display:flex;gap:14px;font-size:12px;color:var(--dim);padding:0 4px}
+  .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+</style>
+</head>
+<body>
+<header>
+  <h1>승강기 주행 계측</h1>
+  <span id="fs">— Hz</span>
+</header>
+
+<div class="readouts">
+  <div class="ro" style="--c:var(--acc)"><div class="k">가속도</div><div class="v" id="a">0.00</div><div class="u">m/s²</div><div class="p"><em>최대</em> <span id="amax">0.00</span></div></div>
+  <div class="ro" style="--c:var(--vel)"><div class="k">속도</div><div class="v" id="v">0.00</div><div class="u">m/s</div><div class="p"><em>최대</em> <span id="vmax">0.00</span></div></div>
+  <div class="ro" style="--c:var(--jrk)"><div class="k">저크</div><div class="v" id="j">0.00</div><div class="u">m/s³</div><div class="p"><em>최대</em> <span id="jmax">0.00</span></div></div>
+</div>
+
+<canvas id="cv"></canvas>
+<div class="legend"><span><i style="background:var(--acc)"></i>가속도</span><span><i style="background:var(--vel)"></i>속도</span><span><i style="background:var(--jrk)"></i>저크</span></div>
+
+<div class="stats">
+  <div><b>주행 시간</b> <span id="dur">0.0 s</span></div>
+  <div><b>이동 거리</b> <span id="dist">0.00 m</span></div>
+  <div><b>속도 드리프트 보정</b> <span id="bias">—</span></div>
+  <div><b>샘플 수</b> <span id="n">0</span></div>
+</div>
+
+<div class="row">
+  <label for="fc">저역통과 차단주파수</label>
+  <select id="fc"><option value="2">2 Hz</option><option value="3" selected>3 Hz</option><option value="5">5 Hz</option><option value="8">8 Hz</option></select>
+  <div class="spacer"></div>
+  <label for="jfc">저크 필터</label>
+  <select id="jfc"><option value="1">1 Hz</option><option value="2" selected>2 Hz</option><option value="4">4 Hz</option></select>
+</div>
+
+<div id="msg">휴대폰을 카 바닥이나 손잡이에 고정하고, 정지 상태에서 시작을 누르세요.</div>
+
+<div class="btns">
+  <button class="main" id="go">시작</button>
+  <button class="sub" id="csv" disabled>CSV 저장</button>
+  <button class="sub" id="reset" disabled>초기화</button>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const msg = (t, cls='') => { $('msg').textContent = t; $('msg').className = cls; };
+
+  let state = 'idle';           // idle | calib | rec | done
+  let ghat = null, gmag = 9.81; // 정지 시 측정한 중력 단위벡터, 크기
+  let calibBuf = [];
+  let t0 = 0, lastT = 0, lastA = 0, lastJraw = 0;
+  let aF1 = 0, aF2 = 0, jF1 = 0, jF2 = 0; // 2단 1차 LPF 상태
+  let v = 0, s = 0;
+  let S = [];                   // {t, ar, a, v, j, s}
+  let fsEst = 0, wake = null, raf = 0;
+
+  // 2단 1차(cascade) 저역통과. dt가 변해도 안정.
+  function lpf(x, dt, fc, st) {
+    const rc = 1 / (2 * Math.PI * fc), al = dt / (rc + dt);
+    st[0] += al * (x - st[0]);
+    st[1] += al * (st[0] - st[1]);
+    return st[1];
+  }
+  const aSt = [0,0], jSt = [0,0];
+
+  function onMotion(e) {
+    const g = e.accelerationIncludingGravity;
+    if (!g || g.x == null) return;
+    const now = performance.now() / 1000;
+
+    if (state === 'calib') {
+      calibBuf.push([g.x, g.y, g.z, now]);
+      if (now - calibBuf[0][3] >= 2.0) {
+        const n = calibBuf.length;
+        const m = calibBuf.reduce((p,c)=>[p[0]+c[0],p[1]+c[1],p[2]+c[2]],[0,0,0]).map(x=>x/n);
+        gmag = Math.hypot(...m);
+        ghat = m.map(x => x / gmag);
+        fsEst = n / (now - calibBuf[0][3]);
+        $('fs').textContent = fsEst.toFixed(0) + ' Hz';
+        // 정지 상태 노이즈로 필터 상태 초기화
+        aSt[0]=aSt[1]=0; jSt[0]=jSt[1]=0;
+        t0 = now; lastT = now; lastA = 0; v = 0; s = 0; S = [];
+        state = 'rec';
+        $('go').textContent = '정지'; $('go').classList.add('stop');
+        msg(`영점 완료 (|g| = ${gmag.toFixed(3)} m/s²). 기록 중 — 주행이 끝나면 정지를 누르세요.`, 'ok');
+        raf = requestAnimationFrame(draw);
+      }
+      return;
+    }
+    if (state !== 'rec') return;
+
+    const dt = now - lastT; if (dt <= 0 || dt > 0.5) { lastT = now; return; }
+    lastT = now;
+    const t = now - t0;
+    // 중력축 투영 - |g|  → 연직 가속도 (위쪽 +). 센서 부호 규약에 무관.
+    const ar = g.x*ghat[0] + g.y*ghat[1] + g.z*ghat[2] - gmag;
+    const a = lpf(ar, dt, +$('fc').value, aSt);
+    const jr = (a - lastA) / dt;
+    const j = lpf(jr, dt, +$('jfc').value, jSt);
+    v += (a + lastA) / 2 * dt;
+    s += v * dt;
+    lastA = a;
+    S.push({t, ar, a, v, j, s});
+  }
+
+  function finish() {
+    state = 'done';
+    cancelAnimationFrame(raf);
+    if (S.length < 10) { msg('데이터가 부족합니다. 초기화 후 다시 시도하세요.', 'err'); return; }
+    // 종료 시 v=0 가정 → 가속도 오프셋(bias) 추정, 선형 드리프트 제거
+    const T = S[S.length-1].t, bias = S[S.length-1].v / T;
+    let vv = 0, ss = 0;
+    for (let i = 0; i < S.length; i++) {
+      const p = S[i];
+      p.a -= bias;
+      if (i > 0) { const q = S[i-1], dt = p.t - q.t; vv += (p.a + q.a)/2*dt; ss += vv*dt; }
+      p.v = vv; p.s = ss;
+    }
+    $('bias').textContent = (bias*1000).toFixed(1) + ' mm/s²';
+    draw(); updateStats(true);
+    $('go').textContent = '완료'; $('go').disabled = true; $('go').classList.remove('stop');
+    $('csv').disabled = false;
+    msg('기록 종료. 속도는 종료 시 정지 조건으로 드리프트 보정했습니다.', 'ok');
+    if (wake) { wake.release(); wake = null; }
+  }
+
+  function updateStats(final) {
+    if (!S.length) return;
+    const p = S[S.length-1];
+    let am=0, vm=0, jm=0;
+    for (const q of S) { am = Math.max(am, Math.abs(q.a)); vm = Math.max(vm, Math.abs(q.v)); jm = Math.max(jm, Math.abs(q.j)); }
+    $('a').textContent = p.a.toFixed(2); $('v').textContent = p.v.toFixed(2); $('j').textContent = p.j.toFixed(2);
+    $('amax').textContent = am.toFixed(2); $('vmax').textContent = vm.toFixed(2); $('jmax').textContent = jm.toFixed(2);
+    $('dur').textContent = p.t.toFixed(1) + ' s';
+    $('dist').textContent = p.s.toFixed(2) + ' m';
+    $('n').textContent = S.length;
+  }
+
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  function draw() {
+    const dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+    if (cv.width !== W*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,W,H);
+    const padL=8, padR=8, padT=10, padB=18;
+    const w = W-padL-padR, h = H-padT-padB, mid = padT + h/2;
+    ctx.strokeStyle = '#2b3648'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, mid); ctx.lineTo(padL+w, mid); ctx.stroke();
+    if (S.length > 1) {
+      const T = Math.max(S[S.length-1].t, 5);
+      const trace = (key, color, scale) => {
+        ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.beginPath();
+        for (let i = 0; i < S.length; i++) {
+          const x = padL + S[i].t / T * w, y = mid - S[i][key] / scale * (h/2);
+          i ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+        }
+        ctx.stroke();
+      };
+      let am=0.5, vm=0.5, jm=0.5;
+      for (const q of S) { am = Math.max(am, Math.abs(q.a)); vm = Math.max(vm, Math.abs(q.v)); jm = Math.max(jm, Math.abs(q.j)); }
+      trace('j', '#ff7d6e', jm*1.1); trace('v', '#5cc8ff', vm*1.1); trace('a', '#f2b33d', am*1.1);
+      ctx.fillStyle = '#8d9ab0'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+      ctx.fillText(`±${am.toFixed(1)} m/s²  ±${vm.toFixed(2)} m/s  ±${jm.toFixed(1)} m/s³`, W-padR, H-4);
+      ctx.textAlign = 'left'; ctx.fillText(`0 – ${T.toFixed(0)} s`, padL, H-4);
+    }
+    if (state === 'rec') { updateStats(false); raf = requestAnimationFrame(draw); }
+  }
+
+  async function start() {
+    if (state === 'rec') return finish();
+    try {
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+        const r = await DeviceMotionEvent.requestPermission();
+        if (r !== 'granted') { msg('모션 센서 권한이 거부되었습니다.', 'err'); return; }
+      }
+      if (!('DeviceMotionEvent' in window)) { msg('이 브라우저는 모션 센서를 지원하지 않습니다.', 'err'); return; }
+      if (!isSecureContext) { msg('HTTPS(또는 localhost)에서만 센서를 사용할 수 있습니다.', 'err'); return; }
+      try { wake = await navigator.wakeLock?.request('screen'); } catch(_) {}
+      calibBuf = []; state = 'calib';
+      window.addEventListener('devicemotion', onMotion);
+      msg('영점 잡는 중… 2초간 움직이지 마세요.');
+      $('reset').disabled = false;
+      setTimeout(() => { if (state === 'calib' && calibBuf.length === 0) msg('센서 데이터가 들어오지 않습니다. Chrome에서 직접 열었는지 확인하세요.', 'err'); }, 1500);
+    } catch (e) { msg('시작 실패: ' + e.message, 'err'); }
+  }
+
+  function reset() {
+    window.removeEventListener('devicemotion', onMotion);
+    cancelAnimationFrame(raf);
+    if (wake) { wake.release(); wake = null; }
+    state = 'idle'; S = []; calibBuf = [];
+    for (const id of ['a','v','j','amax','vmax','jmax']) $(id).textContent = '0.00';
+    $('dur').textContent = '0.0 s'; $('dist').textContent = '0.00 m'; $('bias').textContent = '—'; $('n').textContent = '0'; $('fs').textContent = '— Hz';
+    $('go').textContent = '시작'; $('go').disabled = false; $('go').classList.remove('stop');
+    $('csv').disabled = true; $('reset').disabled = true;
+    draw(); msg('휴대폰을 카 바닥이나 손잡이에 고정하고, 정지 상태에서 시작을 누르세요.');
+  }
+
+  function exportCsv() {
+    const rows = ['t_s,a_raw_mps2,a_filt_mps2,v_mps,jerk_mps3,s_m'];
+    for (const p of S) rows.push([p.t.toFixed(4), p.ar.toFixed(4), p.a.toFixed(4), p.v.toFixed(4), p.j.toFixed(4), p.s.toFixed(4)].join(','));
+    const blob = new Blob([rows.join('\n')], {type:'text/csv'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'elevator_ride_' + new Date().toISOString().replace(/[:.]/g,'-').slice(0,19) + '.csv';
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  $('go').onclick = start; $('reset').onclick = reset; $('csv').onclick = exportCsv;
+  addEventListener('resize', draw); draw();
+})();
+</script>
+</body>
+</html>
