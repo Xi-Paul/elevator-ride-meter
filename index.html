@@ -19,6 +19,11 @@
   header{display:flex;align-items:baseline;justify-content:space-between;padding-top:12px}
   header h1{font-size:17px;font-weight:600;margin:0;letter-spacing:-.01em}
   header span{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--panel);border-radius:10px;padding:4px;gap:4px}
+  .tab{border:0;border-radius:7px;padding:10px;font-size:15px;font-weight:600;background:transparent;color:var(--dim);font-family:inherit;display:flex;justify-content:center;gap:8px;align-items:center}
+  .tab.on{background:var(--ink);color:var(--bg)}
+  .tab .dot{width:8px;height:8px;border-radius:50%;background:var(--line)}
+  .tab .dot.has{background:var(--ok)} .tab .dot.rec{background:var(--jrk)}
   .readouts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
   .ro{background:var(--panel);border-radius:10px;padding:12px 10px 10px;border-top:3px solid var(--c)}
   .ro .k{font-size:12px;color:var(--dim)}
@@ -33,7 +38,7 @@
   .row label{font-size:12px;color:var(--dim)}
   select{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px}
   .spacer{flex:1}
-  .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:auto}
+  .btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:auto}
   button{border:0;border-radius:12px;padding:16px;font-size:16px;font-weight:600;color:var(--bg);background:var(--ink);font-family:inherit}
   button.main{grid-column:1 / -1;background:var(--acc)}
   button.main.stop{background:var(--jrk)}
@@ -51,6 +56,11 @@
   <h1>승강기 주행 계측</h1>
   <span id="fs">— Hz</span>
 </header>
+
+<div class="tabs">
+  <button class="tab on" data-run="up"><span class="dot" id="dot-up"></span>상승</button>
+  <button class="tab" data-run="down"><span class="dot" id="dot-down"></span>하강</button>
+</div>
 
 <div class="readouts">
   <div class="ro" style="--c:var(--acc)"><div class="k">가속도</div><div class="v" id="a">0.00</div><div class="u">m/s²</div><div class="p"><em>max</em> <span id="amax">0.00</span><br><em>min</em> <span id="amin">0.00</span></div></div>
@@ -76,100 +86,102 @@
   <select id="jfc"><option value="1">1 Hz</option><option value="2" selected>2 Hz</option><option value="4">4 Hz</option></select>
 </div>
 
-<div id="msg">휴대폰을 카 바닥이나 손잡이에 고정하고, 정지 상태에서 시작을 누르세요.</div>
+<div id="msg"></div>
 
 <div class="btns">
   <button class="main" id="go">시작</button>
   <button class="sub" id="csv" disabled>CSV 저장</button>
+  <button class="sub" id="load">CSV 불러오기</button>
   <button class="sub" id="reset" disabled>초기화</button>
+  <input type="file" id="file" accept=".csv,text/csv" hidden>
 </div>
 
 <script>
 (() => {
   const $ = id => document.getElementById(id);
   const msg = (t, cls='') => { $('msg').textContent = t; $('msg').className = cls; };
+  const IDLE_MSG = '휴대폰을 카 바닥이나 손잡이에 고정하고, 정지 상태에서 시작을 누르세요.';
+  const LABEL = { up:'상승', down:'하강' };
 
-  let state = 'idle';           // idle | calib | rec | done
-  let ghat = null, gmag = 9.81; // 정지 시 측정한 중력 단위벡터, 크기
-  let calibBuf = [];
-  let t0 = 0, lastT = 0, lastA = 0, lastJraw = 0;
-  let aF1 = 0, aF2 = 0, jF1 = 0, jF2 = 0; // 2단 1차 LPF 상태
-  let v = 0, s = 0;
-  let S = [];                   // {t, ar, a, v, j, s}
-  let fsEst = 0, wake = null, raf = 0;
+  // 탭별 독립 데이터
+  const newRun = () => ({ S:[], state:'idle', fsEst:0, bias:null, src:null });
+  const runs = { up:newRun(), down:newRun() };
+  let cur = 'up';          // 표시 중인 탭
+  let recRun = null;       // 기록 중인 탭 키 (기록은 시작 당시 탭에 귀속)
 
-  // 2단 1차(cascade) 저역통과. dt가 변해도 안정.
+  // 기록 중 임시 상태
+  let ghat = null, gmag = 9.81, calibBuf = [];
+  let t0 = 0, lastT = 0, lastA = 0, v = 0, s = 0;
+  const aSt = [0,0], jSt = [0,0];
+  let wake = null, raf = 0;
+
   function lpf(x, dt, fc, st) {
     const rc = 1 / (2 * Math.PI * fc), al = dt / (rc + dt);
     st[0] += al * (x - st[0]);
     st[1] += al * (st[0] - st[1]);
     return st[1];
   }
-  const aSt = [0,0], jSt = [0,0];
 
   function onMotion(e) {
     const g = e.accelerationIncludingGravity;
-    if (!g || g.x == null) return;
+    if (!g || g.x == null || !recRun) return;
+    const R = runs[recRun];
     const now = performance.now() / 1000;
 
-    if (state === 'calib') {
+    if (R.state === 'calib') {
       calibBuf.push([g.x, g.y, g.z, now]);
       if (now - calibBuf[0][3] >= 2.0) {
         const n = calibBuf.length;
         const m = calibBuf.reduce((p,c)=>[p[0]+c[0],p[1]+c[1],p[2]+c[2]],[0,0,0]).map(x=>x/n);
-        gmag = Math.hypot(...m);
-        ghat = m.map(x => x / gmag);
-        fsEst = n / (now - calibBuf[0][3]);
-        $('fs').textContent = fsEst.toFixed(0) + ' Hz';
-        // 정지 상태 노이즈로 필터 상태 초기화
+        gmag = Math.hypot(...m); ghat = m.map(x => x / gmag);
+        R.fsEst = n / (now - calibBuf[0][3]);
         aSt[0]=aSt[1]=0; jSt[0]=jSt[1]=0;
-        t0 = now; lastT = now; lastA = 0; v = 0; s = 0; S = [];
-        state = 'rec';
-        $('go').textContent = '정지'; $('go').classList.add('stop');
-        msg(`영점 완료 (|g| = ${gmag.toFixed(3)} m/s²). 기록 중 — 주행이 끝나면 정지를 누르세요.`, 'ok');
+        t0 = now; lastT = now; lastA = 0; v = 0; s = 0; R.S = [];
+        R.state = 'rec';
+        refreshUI();
+        msg(`[${LABEL[recRun]}] 영점 완료 (|g| = ${gmag.toFixed(3)} m/s²). 기록 중 — 주행이 끝나면 정지를 누르세요.`, 'ok');
         raf = requestAnimationFrame(draw);
       }
       return;
     }
-    if (state !== 'rec') return;
+    if (R.state !== 'rec') return;
 
     const dt = now - lastT; if (dt <= 0 || dt > 0.5) { lastT = now; return; }
     lastT = now;
     const t = now - t0;
-    // 중력축 투영 - |g|  → 연직 가속도 (위쪽 +). 센서 부호 규약에 무관.
     const ar = g.x*ghat[0] + g.y*ghat[1] + g.z*ghat[2] - gmag;
     const a = lpf(ar, dt, +$('fc').value, aSt);
-    const jr = (a - lastA) / dt;
-    const j = lpf(jr, dt, +$('jfc').value, jSt);
+    const j = lpf((a - lastA) / dt, dt, +$('jfc').value, jSt);
     v += (a + lastA) / 2 * dt;
     s += v * dt;
     lastA = a;
-    S.push({t, ar, a, v, j, s});
+    R.S.push({t, ar, a, v, j, s});
   }
 
   function finish() {
-    state = 'done';
+    const key = recRun, R = runs[key];
+    window.removeEventListener('devicemotion', onMotion);
     cancelAnimationFrame(raf);
-    if (S.length < 10) { msg('데이터가 부족합니다. 초기화 후 다시 시도하세요.', 'err'); return; }
-    // 종료 시 v=0 가정 → 가속도 오프셋(bias) 추정, 선형 드리프트 제거
-    const T = S[S.length-1].t, bias = S[S.length-1].v / T;
+    if (wake) { wake.release(); wake = null; }
+    recRun = null;
+    if (R.S.length < 10) { R.state = 'idle'; R.S = []; refreshUI(); msg('데이터가 부족합니다. 다시 시도하세요.', 'err'); return; }
+    const S = R.S, T = S[S.length-1].t, bias = S[S.length-1].v / T;
     let vv = 0, ss = 0;
     for (let i = 0; i < S.length; i++) {
-      const p = S[i];
-      p.a -= bias;
+      const p = S[i]; p.a -= bias;
       if (i > 0) { const q = S[i-1], dt = p.t - q.t; vv += (p.a + q.a)/2*dt; ss += vv*dt; }
       p.v = vv; p.s = ss;
     }
-    $('bias').textContent = (bias*1000).toFixed(1) + ' mm/s²';
-    draw(); updateStats(true);
-    $('go').textContent = '완료'; $('go').disabled = true; $('go').classList.remove('stop');
-    $('csv').disabled = false;
-    msg('기록 종료. 속도는 종료 시 정지 조건으로 드리프트 보정했습니다.', 'ok');
-    if (wake) { wake.release(); wake = null; }
+    R.bias = bias; R.state = 'done'; R.src = null;
+    cur = key; refreshUI();
+    msg(`[${LABEL[key]}] 기록 종료. 종료 시 정지 조건으로 드리프트 보정했습니다.`, 'ok');
   }
 
-  function updateStats(final) {
-    if (!S.length) return;
+  function updateStats() {
+    const R = runs[cur], S = R.S;
+    const z = () => { for (const id of ['a','v','j','amax','vmax','jmax','amin','vmin','jmin']) $(id).textContent = '0.00';
+      $('dur').textContent='0.0 s'; $('dist').textContent='0.00 m'; $('n').textContent='0'; };
+    if (!S.length) { z(); $('bias').textContent = '—'; return; }
     const p = S[S.length-1];
     let aMx=-1e9,aMn=1e9,vMx=-1e9,vMn=1e9,jMx=-1e9,jMn=1e9;
     for (const q of S) { aMx=Math.max(aMx,q.a); aMn=Math.min(aMn,q.a); vMx=Math.max(vMx,q.v); vMn=Math.min(vMn,q.v); jMx=Math.max(jMx,q.j); jMn=Math.min(jMn,q.j); }
@@ -180,16 +192,16 @@
     $('dur').textContent = p.t.toFixed(1) + ' s';
     $('dist').textContent = p.s.toFixed(2) + ' m';
     $('n').textContent = S.length;
+    $('bias').textContent = R.src ? '(파일)' : R.bias == null ? '—' : (R.bias*1000).toFixed(1) + ' mm/s²';
   }
 
   const cv = $('cv'), ctx = cv.getContext('2d');
   function draw() {
+    const R = runs[cur], S = R.S;
     const dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
     if (cv.width !== W*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    ctx.clearRect(0,0,W,H);
-    const padL=8, padR=8, padT=10, padB=18;
-    const w = W-padL-padR, h = H-padT-padB, mid = padT + h/2;
+    ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+    const padL=8, padR=8, padT=10, padB=18, w = W-padL-padR, h = H-padT-padB, mid = padT + h/2;
     ctx.strokeStyle = '#2b3648'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(padL, mid); ctx.lineTo(padL+w, mid); ctx.stroke();
     if (S.length > 1) {
@@ -207,53 +219,106 @@
       trace('j', '#ff7d6e', jm*1.1); trace('v', '#5cc8ff', vm*1.1); trace('a', '#f2b33d', am*1.1);
       ctx.fillStyle = '#8d9ab0'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
       ctx.fillText(`±${am.toFixed(1)} m/s²  ±${vm.toFixed(2)} m/s  ±${jm.toFixed(1)} m/s³`, W-padR, H-4);
-      ctx.textAlign = 'left'; ctx.fillText(`0 – ${T.toFixed(0)} s`, padL, H-4);
+      ctx.textAlign = 'left'; ctx.fillText(`${LABEL[cur]}  0 – ${T.toFixed(0)} s`, padL, H-4);
+    } else {
+      ctx.fillStyle = '#8d9ab0'; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+      ctx.fillText(`${LABEL[cur]} 데이터 없음`, W/2, mid - 6);
     }
-    if (state === 'rec') { updateStats(false); raf = requestAnimationFrame(draw); }
+    if (R.state === 'rec' && recRun === cur) { updateStats(); raf = requestAnimationFrame(draw); }
+  }
+
+  function refreshUI() {
+    const R = runs[cur];
+    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.run === cur));
+    for (const k of ['up','down']) {
+      const d = $('dot-'+k), st = runs[k].state;
+      d.className = 'dot' + (st === 'rec' || st === 'calib' ? ' rec' : runs[k].S.length ? ' has' : '');
+    }
+    $('fs').textContent = R.fsEst ? R.fsEst.toFixed(0) + ' Hz' : '— Hz';
+    const go = $('go'); go.classList.remove('stop');
+    if (recRun) {                         // 어딘가 기록 중
+      go.disabled = recRun !== cur;
+      go.textContent = recRun === cur ? '정지' : `${LABEL[recRun]} 기록 중`;
+      if (recRun === cur) go.classList.add('stop');
+    } else {
+      go.disabled = false;
+      go.textContent = R.S.length ? `${LABEL[cur]} 다시 측정` : `${LABEL[cur]} 시작`;
+    }
+    $('csv').disabled = !R.S.length || recRun === cur;
+    $('reset').disabled = !R.S.length || !!recRun;
+    $('load').disabled = !!recRun;
+    updateStats(); draw();
   }
 
   async function start() {
-    if (state === 'rec') return finish();
+    if (recRun === cur) return finish();
+    if (recRun) return;
     try {
       if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
         const r = await DeviceMotionEvent.requestPermission();
         if (r !== 'granted') { msg('모션 센서 권한이 거부되었습니다.', 'err'); return; }
       }
       if (!('DeviceMotionEvent' in window)) { msg('이 브라우저는 모션 센서를 지원하지 않습니다.', 'err'); return; }
-      if (!isSecureContext) { msg('HTTPS(또는 localhost)에서만 센서를 사용할 수 있습니다.', 'err'); return; }
+      if (!isSecureContext) { msg('HTTPS에서만 센서를 사용할 수 있습니다.', 'err'); return; }
       try { wake = await navigator.wakeLock?.request('screen'); } catch(_) {}
-      calibBuf = []; state = 'calib';
+      const R = runs[cur]; R.S = []; R.bias = null; R.src = null; R.fsEst = 0; R.state = 'calib';
+      recRun = cur; calibBuf = [];
       window.addEventListener('devicemotion', onMotion);
-      msg('영점 잡는 중… 2초간 움직이지 마세요.');
-      $('reset').disabled = false;
-      setTimeout(() => { if (state === 'calib' && calibBuf.length === 0) msg('센서 데이터가 들어오지 않습니다. Chrome에서 직접 열었는지 확인하세요.', 'err'); }, 1500);
+      refreshUI();
+      msg(`[${LABEL[cur]}] 영점 잡는 중… 2초간 움직이지 마세요.`);
+      setTimeout(() => { if (runs[recRun]?.state === 'calib' && calibBuf.length === 0) msg('센서 데이터가 들어오지 않습니다. Chrome에서 열었는지 확인하세요.', 'err'); }, 1500);
     } catch (e) { msg('시작 실패: ' + e.message, 'err'); }
   }
 
   function reset() {
-    window.removeEventListener('devicemotion', onMotion);
-    cancelAnimationFrame(raf);
-    if (wake) { wake.release(); wake = null; }
-    state = 'idle'; S = []; calibBuf = [];
-    for (const id of ['a','v','j','amax','vmax','jmax','amin','vmin','jmin']) $(id).textContent = '0.00';
-    $('dur').textContent = '0.0 s'; $('dist').textContent = '0.00 m'; $('bias').textContent = '—'; $('n').textContent = '0'; $('fs').textContent = '— Hz';
-    $('go').textContent = '시작'; $('go').disabled = false; $('go').classList.remove('stop');
-    $('csv').disabled = true; $('reset').disabled = true;
-    draw(); msg('휴대폰을 카 바닥이나 손잡이에 고정하고, 정지 상태에서 시작을 누르세요.');
+    if (recRun) return;
+    runs[cur] = newRun();
+    refreshUI(); msg(`[${LABEL[cur]}] 초기화됨.`);
   }
 
   function exportCsv() {
+    const S = runs[cur].S; if (!S.length) return;
     const rows = ['t_s,a_raw_mps2,a_filt_mps2,v_mps,jerk_mps3,s_m'];
     for (const p of S) rows.push([p.t.toFixed(4), p.ar.toFixed(4), p.a.toFixed(4), p.v.toFixed(4), p.j.toFixed(4), p.s.toFixed(4)].join(','));
     const blob = new Blob([rows.join('\n')], {type:'text/csv'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'elevator_ride_' + new Date().toISOString().replace(/[:.]/g,'-').slice(0,19) + '.csv';
+    a.download = `elevator_${cur}_` + new Date().toISOString().replace(/[:.]/g,'-').slice(0,19) + '.csv';
     a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
+  function importCsv(file) {
+    const rd = new FileReader();
+    rd.onload = () => {
+      const lines = rd.result.split(/\r?\n/).filter(l => l.trim());
+      const head = lines[0].split(',').map(h => h.trim());
+      const col = n => head.indexOf(n);
+      const iT=col('t_s'), iAr=col('a_raw_mps2'), iA=col('a_filt_mps2'), iV=col('v_mps'), iJ=col('jerk_mps3'), iS=col('s_m');
+      if (iT<0 || iA<0) { msg('이 앱에서 저장한 CSV 형식이 아닙니다 (t_s, a_filt_mps2 열 필요).', 'err'); return; }
+      const out = [];
+      for (let i = 1; i < lines.length; i++) {
+        const c = lines[i].split(',').map(Number);
+        if (!isFinite(c[iT])) continue;
+        out.push({t:c[iT], ar:iAr>=0?c[iAr]:c[iA], a:c[iA], v:iV>=0?c[iV]:0, j:iJ>=0?c[iJ]:0, s:iS>=0?c[iS]:0});
+      }
+      if (out.length < 2) { msg('데이터 행이 없습니다.', 'err'); return; }
+      // 파일명에 up/down 이 있으면 해당 탭으로, 없으면 현재 탭으로
+      const name = file.name.toLowerCase();
+      const key = /_down[_.]/.test(name) ? 'down' : /_up[_.]/.test(name) ? 'up' : cur;
+      const R = newRun(); R.S = out; R.state = 'done'; R.src = file.name;
+      R.fsEst = (out.length-1) / out[out.length-1].t;
+      runs[key] = R; cur = key;
+      refreshUI(); msg(`[${LABEL[key]}] 불러옴: ${file.name}`, 'ok');
+    };
+    rd.readAsText(file);
+  }
+
+  document.querySelectorAll('.tab').forEach(b => b.onclick = () => { cur = b.dataset.run; refreshUI(); });
+  $('load').onclick = () => $('file').click();
+  $('file').onchange = e => { if (e.target.files[0]) importCsv(e.target.files[0]); e.target.value = ''; };
   $('go').onclick = start; $('reset').onclick = reset; $('csv').onclick = exportCsv;
-  addEventListener('resize', draw); draw();
+  addEventListener('resize', draw);
+  refreshUI(); msg(IDLE_MSG);
 })();
 </script>
 </body>
