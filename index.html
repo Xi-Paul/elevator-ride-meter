@@ -59,11 +59,14 @@
   th{color:var(--dim);font-weight:500;font-size:11px}
   td:first-child,th:first-child{text-align:left}
   .btns{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:auto}
+  #msg{order:0}
+  button.mic{grid-column:1/-1;background:var(--panel);color:var(--dim);border:1px solid var(--line);font-size:13px;padding:10px}
+  button.mic.on{background:var(--ok);color:var(--bg);border-color:var(--ok)}
   .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
   details .row button{border-radius:8px}
   .meta input{background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:8px;font-size:13px;font-family:inherit;min-width:0}
   button{border:0;border-radius:12px;padding:16px;font-size:16px;font-weight:600;color:var(--bg);background:var(--ink);font-family:inherit}
-  button.main{grid-column:1 / -1;background:var(--acc)}
+  button.main{width:100%;background:var(--acc);padding:15px}
   button.main.stop{background:var(--jrk)}
   button.sub{background:var(--panel);color:var(--ink);border:1px solid var(--line);font-weight:500;font-size:14px;padding:12px}
   button:disabled{opacity:.4}
@@ -83,6 +86,8 @@
   <button class="tab" data-dir="down">하강</button>
 </div>
 <div class="trials" id="trials"></div>
+<button class="main" id="go">시작</button>
+<div id="msg"></div>
 <div class="row" style="gap:6px">
   <label for="axis">표시 축</label>
   <select id="axis" style="flex:1"><option value="v" selected>수직 (가속도·속도·저크)</option><option value="x">수평 전후 (진동)</option><option value="y">수평 좌우 (진동)</option></select>
@@ -108,6 +113,7 @@
   <div><b>드리프트 보정</b> <span id="bias">—</span></div>
   <div><b>샘플 수</b> <span id="n">0</span></div>
   <div id="horiz" style="grid-column:1/-1"></div>
+  <div id="isoBox" style="grid-column:1/-1"></div>
   <div id="peaks"></div>
 </div>
 
@@ -140,14 +146,12 @@
   </div>
 </details>
 
-<div id="msg"></div>
-
 <div class="btns">
-  <button class="main" id="go">시작</button>
   <button class="sub" id="csv" disabled>CSV 저장</button>
   <button class="sub" id="load">CSV 불러오기</button>
   <button class="sub" id="reset" disabled>초기화</button>
   <button class="sub" id="report">리포트</button>
+  <button class="mic" id="mic">🎤 음성 명령 꺼짐</button>
   <input type="file" id="file" accept=".csv,text/csv" hidden>
 </div>
 
@@ -368,6 +372,8 @@
     $('dur').textContent = p.t.toFixed(1) + ' s'; $('dist').textContent = p.s.toFixed(2) + ' m'; $('n').textContent = S.length;
     $('bias').textContent = R.src ? '(파일)' : R.bias == null ? '—' : (R.bias*1000).toFixed(1) + ' mm/s²';
     const hz = horizStats(S);
+    const iso = R.done ? isoCalc(R) : null;
+    $('isoBox').innerHTML = iso ? `<b>ISO 18738 (참고)</b> 등속 ${iso.cvDur.toFixed(1)}s${iso.full?'(전체 대체)':''} · VPPV 수직 max ${iso.z.max.toFixed(3)} / A95 ${iso.z.a95.toFixed(3)} · 전후 ${iso.x.max.toFixed(3)}/${iso.x.a95.toFixed(3)} · 좌우 ${iso.y.max.toFixed(3)}/${iso.y.a95.toFixed(3)} m/s²<br>최대 가속 ${iso.aMax.toFixed(2)} · 감속 ${iso.dMax.toFixed(2)} m/s² · 최대 저크 ${iso.jMax.toFixed(2)} m/s³ · 최대 속도 ${iso.vMax.toFixed(2)} m/s` : '';
     $('horiz').innerHTML = hz ? `<b>수평 진동</b> 전후 p-p ${hz.xpp.toFixed(3)} · rms ${hz.xrms.toFixed(3)} / 좌우 p-p ${hz.ypp.toFixed(3)} · rms ${hz.yrms.toFixed(3)} m/s²` : '';
   }
   function updateSummary() {
@@ -635,6 +641,92 @@
   $('geo').onclick = getGeo;
   MKEYS.forEach(k => $(k).oninput = saveMeta);
 
+
+  // ================= ISO 18738 산출 (참고용) =================
+  // 2극 버터워스 저역통과 (쌍선형 변환), 위상 보정을 위해 순·역방향 2회 적용
+  function butter2(fc, fs) {
+    const w = Math.tan(Math.PI * fc / fs), k = Math.SQRT2 * w, n = w * w, d = 1 + k + n;
+    return { b0:n/d, b1:2*n/d, b2:n/d, a1:2*(n-1)/d, a2:(1-k+n)/d };
+  }
+  function biquad(arr, c) {
+    let x1=0, x2=0, y1=0, y2=0; const out = new Array(arr.length);
+    for (let i = 0; i < arr.length; i++) {
+      const v = arr[i];
+      const y = c.b0*v + c.b1*x1 + c.b2*x2 - c.a1*y1 - c.a2*y2;
+      x2 = x1; x1 = v; y2 = y1; y1 = y; out[i] = y;
+    }
+    return out;
+  }
+  function filtfilt(arr, c) { return biquad(biquad(arr, c).reverse(), c).reverse(); }
+
+  // 영교차점 기준 peak-to-peak 진동값(VPPV) 목록 → Max, A95
+  function vppv(sig) {
+    const zc = [];
+    for (let i = 1; i < sig.length; i++)
+      if ((sig[i-1] < 0 && sig[i] >= 0) || (sig[i-1] >= 0 && sig[i] < 0)) zc.push(i);
+    const P = [];
+    for (let k = 0; k + 2 < zc.length; k++) {
+      let mx = -1e9, mn = 1e9;
+      for (let i = zc[k]; i < zc[k+2]; i++) { mx = Math.max(mx, sig[i]); mn = Math.min(mn, sig[i]); }
+      if (mx > mn) P.push(mx - mn);
+    }
+    if (!P.length) return { max:0, a95:0, n:0 };
+    const srt = P.slice().sort((a,b) => a-b);
+    return { max: srt[srt.length-1], a95: srt[Math.floor(0.95 * (srt.length - 1))], n: P.length };
+  }
+
+  // 1 Hz 필터로 가·감속(비등속) 구간 판정 → 앞뒤 0.5 s 확장 → 등속 구간 산출
+  function isoRegions(S, fs, aRaw) {
+    const c1 = butter2(1, fs), a1 = filtfilt(aRaw, c1);
+    const TH = 0.1, pad = Math.round(0.5 * fs);
+    const nz = a1.map(v => Math.abs(v) > TH);
+    const ext = nz.slice();
+    for (let i = 0; i < nz.length; i++) if (nz[i])
+      for (let k = Math.max(0, i-pad); k <= Math.min(nz.length-1, i+pad); k++) ext[k] = true;
+    let i0 = ext.indexOf(true), i3 = ext.lastIndexOf(true);
+    if (i0 < 0) return null;
+    // 비등속 블록 경계
+    const blocks = []; let st = -1;
+    for (let i = 0; i < ext.length; i++) {
+      if (ext[i] && st < 0) st = i;
+      if ((!ext[i] || i === ext.length-1) && st >= 0) { blocks.push([st, ext[i] ? i : i-1]); st = -1; }
+    }
+    const cv = (blocks.length >= 2) ? [blocks[0][1], blocks[blocks.length-1][0]] : null;
+    return { a1, i0, i3, blocks, cv };
+  }
+
+  function isoCalc(R) {
+    const S = R.S; if (!S || S.length < 64) return null;
+    const dur = S[S.length-1].t - S[0].t; if (dur <= 0) return null;
+    const fs = (S.length - 1) / dur;
+    const aRaw = S.map(p => p.ar), xRaw = S.map(p => p.xr || 0), yRaw = S.map(p => p.yr || 0);
+    const reg = isoRegions(S, fs, aRaw); if (!reg) return null;
+    const c10 = butter2(10, fs);
+    // 속도: 10 Hz 저역통과 신호 적분 (종료 시 v=0 조건으로 드리프트 제거)
+    const a10 = filtfilt(aRaw, c10);
+    const vv = new Array(S.length).fill(0);
+    for (let i = 1; i < S.length; i++) vv[i] = vv[i-1] + (a10[i] + a10[i-1]) / 2 * (S[i].t - S[i-1].t);
+    const bias = vv[vv.length-1] / dur;
+    for (let i = 0; i < vv.length; i++) vv[i] -= bias * (S[i].t - S[0].t);
+    let vMax = 0; for (const u of vv) vMax = Math.max(vMax, Math.abs(u));
+    // 저크: 경계 0~3 구간의 필터 가속도 미분 최대
+    let jMax = 0;
+    for (let i = Math.max(1, reg.i0); i <= Math.min(S.length-1, reg.i3); i++) {
+      const dt = S[i].t - S[i-1].t; if (dt <= 0) continue;
+      jMax = Math.max(jMax, Math.abs((a10[i] - a10[i-1]) / dt));
+    }
+    let aMax = 0, dMax = 0;
+    for (let i = reg.i0; i <= reg.i3; i++) { aMax = Math.max(aMax, reg.a1[i]); dMax = Math.min(dMax, reg.a1[i]); }
+    // 진동: 등속 구간에서 저주파(운동 성분) 제거 후 VPPV
+    const seg = reg.cv || [reg.i0, reg.i3];
+    const cut = butter2(1, fs);
+    const hi = arr => { const lo = filtfilt(arr, cut); return arr.map((v,i) => v - lo[i]); };
+    const slice = arr => arr.slice(seg[0], seg[1] + 1);
+    const z = vppv(hi(slice(aRaw))), xx = vppv(hi(slice(xRaw))), yy = vppv(hi(slice(yRaw)));
+    return { fs, z, x:xx, y:yy, vMax, jMax, aMax, dMax,
+      cvDur: S[seg[1]].t - S[seg[0]].t, full: !reg.cv };
+  }
+
   // ---- 리포트 ----
   const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   function svgChart(S, seg) {
@@ -674,6 +766,14 @@
       rep += `<tr><td>${DIR[dir]}</td><td>${g.length}</td><td>${f(av(x=>{const o=stats(x.R.S);return Math.max(Math.abs(o.vMx),Math.abs(o.vMn));}))}</td><td>${f(av(x=>{const o=stats(x.R.S);return Math.max(Math.abs(o.aMx),Math.abs(o.aMn));}))}</td><td>${f(av(x=>{const o=stats(x.R.S);return Math.max(Math.abs(o.jMx),Math.abs(o.jMn));}))}</td><td>${f(av(x=>x.R.S[x.R.S.length-1].s))}</td></tr>`;
     }
     rep += '</table>';
+    let isoTbl = '<table><tr><th>회차</th><th>VPPV 수직 max/A95</th><th>전후 max/A95</th><th>좌우 max/A95</th><th>최대 가속</th><th>최대 감속</th><th>최대 저크</th><th>최대 속도</th><th>등속 구간</th></tr>';
+    for (const it of list) {
+      const q = isoCalc(it.R);
+      if (!q) { isoTbl += `<tr><td>${DIR[it.dir]} ${it.n}회</td><td colspan="8" style="color:#6b7383">산출 불가</td></tr>`; continue; }
+      const g = (a,b) => `${a.toFixed(3)} / ${b.toFixed(3)}`;
+      isoTbl += `<tr><td>${DIR[it.dir]} ${it.n}회</td><td>${g(q.z.max,q.z.a95)}</td><td>${g(q.x.max,q.x.a95)}</td><td>${g(q.y.max,q.y.a95)}</td><td>${q.aMax.toFixed(2)}</td><td>${q.dMax.toFixed(2)}</td><td>${q.jMax.toFixed(2)}</td><td>${q.vMax.toFixed(2)}</td><td>${q.cvDur.toFixed(1)} s${q.full?'*':''}</td></tr>`;
+    }
+    isoTbl += '</table><p class="note">VPPV = 영교차점 사이 peak-to-peak 진동값(m/s²), 등속 구간 기준. A95 = 전체 VPPV의 95 백분위. 최대 가속·감속은 1 Hz 2극 버터워스, 속도는 10 Hz 저역통과 신호 적분. * 는 등속 구간을 분리하지 못해 전 구간으로 대체.</p>';
     let body = '';
     for (const it of list) {
       const S = it.R.S, o = stats(S), p = S[S.length-1], seg = segments(S);
@@ -717,10 +817,12 @@
       측정자 ${esc(meta.by)||'—'} · 작성 ${now.toLocaleString('ko-KR')}</p>
       <h2>1. 전 회차 측정값</h2>${sum}
       <h2>2. 방향별 평균</h2>${rep}
-      <h2>3. 회차별 상세</h2>
+      <h2>3. ISO 18738 산출값 (참고)</h2>${isoTbl}
+      <h2>4. 회차별 상세</h2>
       <p class="lg"><i style="background:#d99a1a"></i>가속도<i style="background:#2b7fc4"></i>속도<i style="background:#d9534f"></i>저크</p>
       ${body}
-      <p class="note" style="margin-top:22px">측정: 스마트폰 3축 가속도계, 정지 시 중력벡터에 투영한 연직 성분. 수평 2축은 보정 시 정한 수평면 직교 기저에 투영(전후 = 기기 세로축의 수평 성분, 좌우 = 그 직교축). 가속도·수평 ${$('fc').value} Hz / 저크 ${$('jfc').value} Hz 2단 저역통과. 속도·거리는 사다리꼴 적분 후 종료 시 v=0 조건으로 선형 드리프트 보정. FFT는 필터 전 원시 가속도에 Hann 윈도우 적용.</p>
+      <p class="note" style="margin-top:22px">측정: 스마트폰 3축 가속도계, 정지 시 중력벡터에 투영한 연직 성분. 수평 2축은 보정 시 정한 수평면 직교 기저에 투영(전후 = 기기 세로축의 수평 성분, 좌우 = 그 직교축). 가속도·수평 ${$('fc').value} Hz / 저크 ${$('jfc').value} Hz 2단 저역통과. 속도·거리는 사다리꼴 적분 후 종료 시 v=0 조건으로 선형 드리프트 보정. FFT는 필터 전 원시 가속도에 Hann 윈도우 적용.
+ISO 18738 항목은 규격의 산출 절차(영교차점 VPPV, 1 Hz 버터워스 구간 판정, 10 Hz 적분 속도)를 따르되 주파수 가중은 적용하지 않았고, 스마트폰 센서로 측정했으므로 규격의 계측기 요구사항은 충족하지 않습니다. 참고값입니다.</p>
       <button onclick="print()">인쇄 / PDF 저장</button></body></html>`;
     const blob = new Blob([html], {type:'text/html'});
     const url = URL.createObjectURL(blob);
@@ -730,6 +832,74 @@
     msg(`리포트 생성 (${list.length}건). 다운로드한 파일을 열고 인쇄 → PDF로 저장하세요.`, 'ok');
   }
   $('report').onclick = buildReport;
+
+
+  // ================= 음성 명령 =================
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null, micOn = false;
+  const NUM = { '일':1, '하나':1, '첫':1, '이':2, '둘':2, '두':2, '삼':3, '셋':3, '세':3, '사':4, '넷':4, '네':4, '오':5, '다섯':5 };
+
+  function voiceCmd(raw) {
+    const t = raw.replace(/\s+/g, '');
+    let done = null;
+    // 방향
+    if (/상승|올라|업/.test(t)) { cur = { dir:'up', n:cur.n }; done = '상승 탭'; }
+    if (/하강|내려|다운/.test(t)) { cur = { dir:'down', n:cur.n }; done = '하강 탭'; }
+    // 회차
+    const m = t.match(/([1-5일이삼사오하나둘두셋세넷네다섯첫])\s*(회|번)/);
+    if (m) {
+      const n = /[1-5]/.test(m[1]) ? +m[1] : NUM[m[1]];
+      if (n && n <= nTrials) { cur = { dir:cur.dir, n }; done = (done ? done + ' · ' : '') + n + '회'; }
+    }
+    // 동작
+    if (/정지|멈춰|멈춤|스톱|그만|종료/.test(t)) { if (recKey) { finish(false); return '정지'; } }
+    if (/시작|출발|기록|측정/.test(t)) { if (!recKey) { refreshUI(); start(); return (done ? done + ' · ' : '') + '시작'; } }
+    if (/초기화|리셋|지워/.test(t)) { reset(); return '초기화'; }
+    if (/리포트|보고서/.test(t)) { buildReport(); return '리포트'; }
+    if (/저장|씨에스브이|시에스브이/.test(t)) { exportCsv(); return 'CSV 저장'; }
+    if (/스펙트럼|주파수/.test(t)) { setView('fft'); return '스펙트럼'; }
+    if (/시간|파형|그래프/.test(t)) { setView('time'); return '시간 그래프'; }
+    if (/수직/.test(t)) { $('axis').value = 'v'; $('axis').onchange(); return '수직 축'; }
+    if (/전후|앞뒤/.test(t)) { $('axis').value = 'x'; $('axis').onchange(); return '전후 축'; }
+    if (/좌우|옆/.test(t)) { $('axis').value = 'y'; $('axis').onchange(); return '좌우 축'; }
+    if (done) { refreshUI(); return done; }
+    return null;
+  }
+
+  function micToggle() {
+    if (!SR) { msg('이 브라우저는 음성 인식을 지원하지 않습니다 (Chrome 권장).', 'err'); return; }
+    if (micOn) { micOn = false; try { rec.stop(); } catch(_) {} rec = null; setMicUI(); msg('음성 명령을 껐습니다.'); return; }
+    rec = new SR();
+    rec.lang = 'ko-KR'; rec.continuous = true; rec.interimResults = false; rec.maxAlternatives = 3;
+    rec.onresult = e => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (!e.results[i].isFinal) continue;
+        let hit = null, said = '';
+        for (let k = 0; k < e.results[i].length; k++) {
+          said = e.results[i][k].transcript;
+          hit = voiceCmd(said);
+          if (hit) break;
+        }
+        if (hit) { msg(`🎤 ${hit}`, 'ok'); if (navigator.vibrate) navigator.vibrate(40); }
+        else msg(`🎤 "${said}" — 인식되지 않는 명령`);
+      }
+    };
+    rec.onerror = ev => {
+      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
+        micOn = false; setMicUI(); msg('마이크 권한이 거부되었습니다.', 'err');
+      } else if (ev.error === 'network') {
+        msg('음성 인식 서버에 연결하지 못했습니다 (승강로 안에서는 전파가 약할 수 있습니다).', 'err');
+      }
+    };
+    rec.onend = () => { if (micOn) { try { rec.start(); } catch(_) {} } };
+    try { rec.start(); micOn = true; setMicUI(); msg('음성 명령 켜짐 — "상승 일회 시작", "정지", "리포트" 처럼 말하세요.', 'ok'); }
+    catch (e) { micOn = false; setMicUI(); msg('음성 인식 시작 실패: ' + e.message, 'err'); }
+  }
+  function setMicUI() {
+    $('mic').classList.toggle('on', micOn);
+    $('mic').textContent = micOn ? '🎤 음성 명령 켜짐 (탭하면 끔)' : '🎤 음성 명령 꺼짐';
+  }
+  $('mic').onclick = micToggle;
 
   document.querySelectorAll('.tab').forEach(b => b.onclick = () => { cur = {dir:b.dataset.dir, n:cur.n}; refreshUI(); });
   document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setView(b.dataset.view));
@@ -747,7 +917,7 @@
   $('file').onchange = e => { if (e.target.files[0]) importCsv(e.target.files[0]); e.target.value = ''; };
   $('go').onclick = start; $('reset').onclick = reset; $('csv').onclick = exportCsv;
   addEventListener('resize', draw);
-  load(); loadMeta(); buildTrials(); refreshUI(); msg(IDLE_MSG);
+  load(); loadMeta(); buildTrials(); refreshUI(); setMicUI(); msg(IDLE_MSG);
 })();
 </script>
 </body>
