@@ -58,7 +58,10 @@
   th,td{text-align:right;padding:4px 2px;border-top:1px solid var(--line);white-space:nowrap}
   th{color:var(--dim);font-weight:500;font-size:11px}
   td:first-child,th:first-child{text-align:left}
-  .btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:auto}
+  .btns{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:auto}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+  details .row button{border-radius:8px}
+  .meta input{background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:8px;font-size:13px;font-family:inherit;min-width:0}
   button{border:0;border-radius:12px;padding:16px;font-size:16px;font-weight:600;color:var(--bg);background:var(--ink);font-family:inherit}
   button.main{grid-column:1 / -1;background:var(--acc)}
   button.main.stop{background:var(--jrk)}
@@ -118,6 +121,17 @@
 </div>
 
 <details><summary>시험 결과 요약 (전 회차)</summary><table id="sum"></table></details>
+<details><summary>리포트 정보</summary>
+  <div class="meta">
+    <input id="m-site" placeholder="현장명"><input id="m-unit" placeholder="호기 / 기종">
+    <input id="m-spec" placeholder="정격 속도·적재 (예: 1.0 m/s, 1000 kg)"><input id="m-by" placeholder="측정자">
+    <input id="m-addr" placeholder="주소 (위치 확인 시 자동)" style="grid-column:1/-1">
+  </div>
+  <div class="row" style="margin-top:6px">
+    <button class="sub" id="geo" style="padding:8px 12px;flex:0 0 auto">현재 위치로 현장 확인</button>
+    <span id="geotxt" style="font-size:11.5px;color:var(--dim)">좌표 없음</span>
+  </div>
+</details>
 
 <div id="msg"></div>
 
@@ -126,6 +140,7 @@
   <button class="sub" id="csv" disabled>CSV 저장</button>
   <button class="sub" id="load">CSV 불러오기</button>
   <button class="sub" id="reset" disabled>초기화</button>
+  <button class="sub" id="report">리포트</button>
   <input type="file" id="file" accept=".csv,text/csv" hidden>
 </div>
 
@@ -343,9 +358,9 @@
     return { acc:[i0,i1], const:[i1,i2], dec:[i2,i3], all:[0,n-1] };
   }
   const SEGNAME = { acc:'가속', const:'등속', dec:'감속', all:'전체' };
-  function spectrum(R) {
+  function spectrum(R, wantArg) {
     const full = R.S; if (full.length < 32) return null;
-    const want = $('fseg').value, seg = segments(full);
+    const want = wantArg || $('fseg').value, seg = segments(full);
     let S = full, used = 'all';
     if (want !== 'all' && seg) { const [a,b] = seg[want]; if (b-a+1 >= 32) { S = full.slice(a, b+1); used = want; } }
     const fs = (S.length-1) / (S[S.length-1].t - S[0].t);
@@ -516,6 +531,141 @@
     rd.readAsText(file);
   }
 
+  // ---- 위치 ----
+  let geo = null;  // {lat, lon, acc, ts, addr}
+  const MKEYS = ['m-site','m-unit','m-spec','m-by','m-addr'];
+  function saveMeta() {
+    try { localStorage.setItem('erm2meta', JSON.stringify({ v:MKEYS.map(k => $(k).value), geo })); } catch(_) {}
+  }
+  function loadMeta() {
+    try { const o = JSON.parse(localStorage.getItem('erm2meta') || 'null'); if (!o) return;
+      MKEYS.forEach((k,i) => $(k).value = o.v[i] || ''); geo = o.geo || null; showGeo(); } catch(_) {}
+  }
+  function showGeo() {
+    $('geotxt').textContent = geo
+      ? `${geo.lat.toFixed(6)}, ${geo.lon.toFixed(6)} (±${geo.acc.toFixed(0)} m)`
+      : '좌표 없음';
+  }
+  function getGeo() {
+    if (!navigator.geolocation) { msg('이 브라우저는 위치를 지원하지 않습니다.', 'err'); return; }
+    $('geo').disabled = true; $('geotxt').textContent = '위치 확인 중…';
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const c = pos.coords;
+      geo = { lat:c.latitude, lon:c.longitude, acc:c.accuracy, ts:pos.timestamp, addr:null };
+      showGeo(); $('geo').disabled = false;
+      if (c.accuracy > 100) msg(`위치 정확도 ±${c.accuracy.toFixed(0)} m — 실내라 오차가 큽니다. 건물 밖이나 창가에서 다시 시도하면 정확해집니다.`, 'err');
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${c.latitude}&lon=${c.longitude}&zoom=18&accept-language=ko`);
+        const d = await r.json();
+        const a = d.address || {};
+        const name = d.name || a.building || a.amenity || a.shop || a.office || '';
+        geo.addr = d.display_name || '';
+        if (name && !$('m-site').value) $('m-site').value = name;
+        if (geo.addr && !$('m-addr').value) $('m-addr').value = geo.addr;
+        saveMeta();
+        msg(name ? `위치 확인: ${name}` : '좌표만 확보했습니다. 건물명은 직접 입력하세요.', 'ok');
+      } catch (e) { saveMeta(); msg('좌표는 확보했으나 건물 조회에 실패했습니다. 현장명을 직접 입력하세요.', 'err'); }
+    }, err => {
+      $('geo').disabled = false; showGeo();
+      msg(err.code === 1 ? '위치 권한이 거부되었습니다.' : '위치를 가져오지 못했습니다.', 'err');
+    }, { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
+  }
+  $('geo').onclick = getGeo;
+  MKEYS.forEach(k => $(k).oninput = saveMeta);
+
+  // ---- 리포트 ----
+  const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  function svgChart(S, seg) {
+    const W = 760, H = 240, L = 46, Rp = 10, T = 12, B = 26, w = W-L-Rp, h = H-T-B, mid = T + h/2;
+    const step = Math.max(1, Math.ceil(S.length / 700));
+    const D = []; for (let i = 0; i < S.length; i += step) D.push(S[i]); D.push(S[S.length-1]);
+    const dur = S[S.length-1].t;
+    let am=.5, vm=.5, jm=.5;
+    for (const q of S) { am=Math.max(am,Math.abs(q.a)); vm=Math.max(vm,Math.abs(q.v)); jm=Math.max(jm,Math.abs(q.j)); }
+    const X = t => L + t/dur*w;
+    const poly = (k, sc, col) => `<polyline fill="none" stroke="${col}" stroke-width="1.4" points="${D.map(p=>X(p.t).toFixed(1)+','+(mid - p[k]/(sc*1.1)*(h/2)).toFixed(1)).join(' ')}"/>`;
+    let g = `<line x1="${L}" y1="${mid}" x2="${L+w}" y2="${mid}" stroke="#c8ceda"/>`;
+    for (let t = 0; t <= dur; t += dur > 30 ? 10 : dur > 12 ? 5 : 2)
+      g += `<line x1="${X(t)}" y1="${T}" x2="${X(t)}" y2="${T+h}" stroke="#eceff4"/><text x="${X(t)}" y="${H-8}" font-size="10" fill="#6b7383" text-anchor="middle">${t.toFixed(0)}</text>`;
+    if (seg) { for (const i of [seg.acc[0], seg.acc[1], seg.dec[0], seg.dec[1]]) g += `<line x1="${X(S[i].t)}" y1="${T}" x2="${X(S[i].t)}" y2="${T+h}" stroke="#9aa4b5" stroke-dasharray="3 3"/>`;
+      const lab=(a,b,t)=>`<text x="${(X(S[a].t)+X(S[b].t))/2}" y="${T+12}" font-size="10" fill="#6b7383" text-anchor="middle">${t}</text>`;
+      g += lab(seg.acc[0],seg.acc[1],'가속')+lab(seg.const[0],seg.const[1],'등속')+lab(seg.dec[0],seg.dec[1],'감속'); }
+    g += poly('j', jm, '#d9534f') + poly('v', vm, '#2b7fc4') + poly('a', am, '#d99a1a');
+    g += `<text x="${L}" y="${H-8}" font-size="10" fill="#6b7383">s</text><text x="${L+w}" y="${H-8}" font-size="10" fill="#6b7383" text-anchor="end">a ±${am.toFixed(2)} m/s²  ·  v ±${vm.toFixed(2)} m/s  ·  j ±${jm.toFixed(1)} m/s³</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg">${g}</svg>`;
+  }
+  function buildReport() {
+    const meta = { site:$('m-site').value, unit:$('m-unit').value, spec:$('m-spec').value, by:$('m-by').value, addr:$('m-addr').value };
+    const list = [];
+    for (const dir of ['up','down']) for (let n = 1; n <= nTrials; n++) { const R = runs[dir+n]; if (R && R.S.length) list.push({ key:dir+n, dir, n, R }); }
+    if (!list.length) { msg('리포트에 포함할 측정 데이터가 없습니다.', 'err'); return; }
+    const f = x => x.toFixed(2);
+    let sum = '<table><tr><th>회차</th><th>a max</th><th>a min</th><th>v max</th><th>v min</th><th>j max</th><th>j min</th><th>주행시간</th><th>거리</th><th>fs</th></tr>';
+    for (const it of list) { const o = stats(it.R.S), p = it.R.S[it.R.S.length-1];
+      sum += `<tr><td>${DIR[it.dir]} ${it.n}회</td><td>${f(o.aMx)}</td><td>${f(o.aMn)}</td><td>${f(o.vMx)}</td><td>${f(o.vMn)}</td><td>${f(o.jMx)}</td><td>${f(o.jMn)}</td><td>${p.t.toFixed(1)} s</td><td>${f(p.s)} m</td><td>${it.R.fsEst.toFixed(0)} Hz</td></tr>`; }
+    sum += '</table>';
+    // 방향별 평균/편차
+    let rep = '<table><tr><th>방향</th><th>회수</th><th>|v| max 평균</th><th>|a| max 평균</th><th>|j| max 평균</th><th>거리 평균</th></tr>';
+    for (const dir of ['up','down']) {
+      const g = list.filter(x => x.dir === dir); if (!g.length) continue;
+      const av = fn => g.reduce((t,x)=>t+fn(x),0)/g.length;
+      rep += `<tr><td>${DIR[dir]}</td><td>${g.length}</td><td>${f(av(x=>{const o=stats(x.R.S);return Math.max(Math.abs(o.vMx),Math.abs(o.vMn));}))}</td><td>${f(av(x=>{const o=stats(x.R.S);return Math.max(Math.abs(o.aMx),Math.abs(o.aMn));}))}</td><td>${f(av(x=>{const o=stats(x.R.S);return Math.max(Math.abs(o.jMx),Math.abs(o.jMn));}))}</td><td>${f(av(x=>x.R.S[x.R.S.length-1].s))}</td></tr>`;
+    }
+    rep += '</table>';
+    let body = '';
+    for (const it of list) {
+      const S = it.R.S, o = stats(S), p = S[S.length-1], seg = segments(S);
+      let fftTbl = '<table><tr><th>구간</th><th>길이</th><th>fs</th><th>Δf</th><th>피크 1</th><th>피크 2</th><th>피크 3</th></tr>';
+      for (const w of ['acc','const','dec']) {
+        const sp = spectrum(it.R, w); if (!sp) continue;
+        const pk = i => sp.peaks[i] ? `${sp.peaks[i].f.toFixed(2)} Hz / ${sp.peaks[i].a.toFixed(3)}` : '—';
+        fftTbl += `<tr><td>${sp.seg}${sp.fallback?'*':''}</td><td>${sp.dur.toFixed(1)} s</td><td>${sp.fs.toFixed(0)} Hz</td><td>${sp.df.toFixed(2)} Hz</td><td>${pk(0)}</td><td>${pk(1)}</td><td>${pk(2)}</td></tr>`;
+      }
+      fftTbl += '</table><p class="note">피크 = 주파수 / 진폭(m/s²), 원시 가속도 기준. * 표시는 구간 샘플 부족으로 전체 구간 대체.</p>';
+      body += `<section><h3>${DIR[it.dir]} ${it.n}회</h3>${svgChart(S, seg)}
+        <table><tr><th>항목</th><th>max</th><th>min</th></tr>
+        <tr><td>가속도 (m/s²)</td><td>${f(o.aMx)}</td><td>${f(o.aMn)}</td></tr>
+        <tr><td>속도 (m/s)</td><td>${f(o.vMx)}</td><td>${f(o.vMn)}</td></tr>
+        <tr><td>저크 (m/s³)</td><td>${f(o.jMx)}</td><td>${f(o.jMn)}</td></tr></table>
+        <p class="note">주행 시간 ${p.t.toFixed(1)} s · 이동 거리 ${f(p.s)} m · 샘플 ${S.length} @ ${it.R.fsEst.toFixed(0)} Hz · 드리프트 보정 ${it.R.src ? '(파일)' : it.R.bias==null ? '—' : (it.R.bias*1000).toFixed(1)+' mm/s²'}</p>
+        ${fftTbl}</section>`;
+    }
+    const now = new Date();
+    const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>승강기 주행 계측 리포트</title><style>
+      body{font-family:system-ui,"Noto Sans KR",sans-serif;color:#1b2029;max-width:840px;margin:0 auto;padding:24px 18px 60px;line-height:1.55}
+      h1{font-size:21px;margin:0 0 4px} h3{font-size:16px;margin:26px 0 8px;padding-bottom:4px;border-bottom:2px solid #1b2029}
+      h2{font-size:15px;margin:22px 0 6px;color:#42506b}
+      table{width:100%;border-collapse:collapse;font-size:12.5px;margin:6px 0 4px;font-variant-numeric:tabular-nums}
+      th,td{border:1px solid #d5dae3;padding:5px 7px;text-align:right} th{background:#f2f4f8;font-weight:600} td:first-child,th:first-child{text-align:left}
+      .note{font-size:11.5px;color:#6b7383;margin:4px 0 0}
+      .hdr{font-size:12.5px;color:#42506b;margin:0 0 14px}
+      svg{border:1px solid #e3e7ee;border-radius:6px;background:#fff;margin:4px 0}
+      .lg{font-size:11.5px;color:#6b7383;margin:2px 0 8px}
+      .lg i{display:inline-block;width:13px;height:3px;vertical-align:middle;margin:0 4px 0 10px}
+      button{position:fixed;right:16px;bottom:16px;padding:12px 18px;border:0;border-radius:10px;background:#1b2029;color:#fff;font-size:14px;font-family:inherit}
+      @media print{button{display:none} section{break-inside:avoid}}
+      </style></head><body>
+      <h1>승강기 주행 계측 리포트</h1>
+      <p class="hdr">현장 ${esc(meta.site)||'—'} · 호기/기종 ${esc(meta.unit)||'—'} · 사양 ${esc(meta.spec)||'—'}<br>
+      ${meta.addr ? '주소 '+esc(meta.addr)+'<br>' : ''}
+      ${geo ? `위치 ${geo.lat.toFixed(6)}, ${geo.lon.toFixed(6)} (±${geo.acc.toFixed(0)} m) · <a href="https://www.google.com/maps?q=${geo.lat},${geo.lon}">지도</a><br>` : ''}
+      측정자 ${esc(meta.by)||'—'} · 작성 ${now.toLocaleString('ko-KR')}</p>
+      <h2>1. 전 회차 측정값</h2>${sum}
+      <h2>2. 방향별 평균</h2>${rep}
+      <h2>3. 회차별 상세</h2>
+      <p class="lg"><i style="background:#d99a1a"></i>가속도<i style="background:#2b7fc4"></i>속도<i style="background:#d9534f"></i>저크</p>
+      ${body}
+      <p class="note" style="margin-top:22px">측정: 스마트폰 3축 가속도계, 정지 시 중력벡터에 투영한 연직 성분. 가속도 ${$('fc').value} Hz / 저크 ${$('jfc').value} Hz 2단 저역통과. 속도·거리는 사다리꼴 적분 후 종료 시 v=0 조건으로 선형 드리프트 보정. FFT는 필터 전 원시 가속도에 Hann 윈도우 적용.</p>
+      <button onclick="print()">인쇄 / PDF 저장</button></body></html>`;
+    const blob = new Blob([html], {type:'text/html'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `ride_report_${(meta.unit||'unit').replace(/\s+/g,'')}_${now.toISOString().slice(0,10)}.html`;
+    a.click(); setTimeout(() => URL.revokeObjectURL(url), 3000);
+    msg(`리포트 생성 (${list.length}건). 다운로드한 파일을 열고 인쇄 → PDF로 저장하세요.`, 'ok');
+  }
+  $('report').onclick = buildReport;
+
   document.querySelectorAll('.tab').forEach(b => b.onclick = () => { cur = {dir:b.dataset.dir, n:cur.n}; refreshUI(); });
   document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setView(b.dataset.view));
   document.querySelectorAll('.lg').forEach(b => b.onclick = () => { const k = b.dataset.tr; show[k] = !show[k]; b.classList.toggle('on', show[k]); draw(); });
@@ -524,7 +674,7 @@
   $('file').onchange = e => { if (e.target.files[0]) importCsv(e.target.files[0]); e.target.value = ''; };
   $('go').onclick = start; $('reset').onclick = reset; $('csv').onclick = exportCsv;
   addEventListener('resize', draw);
-  load(); buildTrials(); refreshUI(); msg(IDLE_MSG);
+  load(); loadMeta(); buildTrials(); refreshUI(); msg(IDLE_MSG);
 })();
 </script>
 </body>
