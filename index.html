@@ -15,29 +15,49 @@
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;-webkit-user-select:none;user-select:none}
-  body{padding:env(safe-area-inset-top) 14px calc(env(safe-area-inset-bottom) + 14px);max-width:520px;margin:0 auto;display:flex;flex-direction:column;min-height:100dvh;gap:12px}
+  body{padding:env(safe-area-inset-top) 14px calc(env(safe-area-inset-bottom) + 14px);max-width:520px;margin:0 auto;display:flex;flex-direction:column;min-height:100dvh;gap:10px}
   header{display:flex;align-items:baseline;justify-content:space-between;padding-top:12px}
   header h1{font-size:17px;font-weight:600;margin:0;letter-spacing:-.01em}
   header span{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
   .tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--panel);border-radius:10px;padding:4px;gap:4px}
-  .tab{border:0;border-radius:7px;padding:10px;font-size:15px;font-weight:600;background:transparent;color:var(--dim);font-family:inherit;display:flex;justify-content:center;gap:8px;align-items:center}
+  .tab{border:0;border-radius:7px;padding:9px;font-size:15px;font-weight:600;background:transparent;color:var(--dim);font-family:inherit}
   .tab.on{background:var(--ink);color:var(--bg)}
-  .tab .dot{width:8px;height:8px;border-radius:50%;background:var(--line)}
-  .tab .dot.has{background:var(--ok)} .tab .dot.rec{background:var(--jrk)}
+  .trials{display:flex;gap:6px;align-items:center}
+  .trials .chip{flex:1;border:1px solid var(--line);background:var(--panel);color:var(--dim);border-radius:8px;padding:8px 0;font-size:14px;font-weight:600;display:flex;justify-content:center;gap:6px;align-items:center}
+  .trials .chip.on{border-color:var(--acc);color:var(--ink)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--line)}
+  .dot.has{background:var(--ok)} .dot.rec{background:var(--jrk)}
+  .trials select{padding:6px 4px;font-size:12px}
   .readouts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-  .ro{background:var(--panel);border-radius:10px;padding:12px 10px 10px;border-top:3px solid var(--c)}
+  .ro{background:var(--panel);border-radius:10px;padding:10px 10px 8px;border-top:3px solid var(--c)}
   .ro .k{font-size:12px;color:var(--dim)}
-  .ro .v{font-size:30px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.15;margin-top:2px;color:var(--c)}
+  .ro .v{font-size:28px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.15;margin-top:2px;color:var(--c)}
   .ro .u{font-size:11px;color:var(--dim)}
-  .ro .p{font-size:12px;color:var(--ink);margin-top:6px;font-variant-numeric:tabular-nums;line-height:1.5}
+  .ro .p{font-size:12px;color:var(--ink);margin-top:5px;font-variant-numeric:tabular-nums;line-height:1.5}
   .ro .p em{font-style:normal;color:var(--dim)}
-  canvas{width:100%;height:230px;background:var(--panel);border-radius:10px;display:block}
+  canvas{width:100%;height:220px;background:var(--panel);border-radius:10px;display:block}
+  .legend{display:flex;gap:12px;font-size:12px;color:var(--dim);padding:0 4px;align-items:center}
+  .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+  .legend .spacer{flex:1}
+  .lg{border:0;background:transparent;color:var(--dim);font-size:12px;padding:4px 6px;border-radius:6px;font-family:inherit;font-weight:500;opacity:.4}
+  .lg.on{opacity:1;color:var(--ink)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .seg button{border:0;background:transparent;color:var(--dim);padding:5px 9px;font-size:12px;font-weight:500}
+  .seg button.on{background:var(--line);color:var(--ink)}
   .stats{background:var(--panel);border-radius:10px;padding:10px 12px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-variant-numeric:tabular-nums}
   .stats b{font-weight:500;color:var(--dim)}
-  .row{display:flex;gap:8px;align-items:center}
+  #peaks{grid-column:1/-1;display:none;padding-top:4px;border-top:1px solid var(--line);margin-top:2px}
+  #peaks span{display:inline-block;margin-right:10px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .row label{font-size:12px;color:var(--dim)}
-  select{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px}
+  select{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;font-family:inherit}
   .spacer{flex:1}
+  details{background:var(--panel);border-radius:10px;padding:8px 12px;font-size:12px}
+  summary{cursor:pointer;color:var(--dim);font-weight:500}
+  table{width:100%;border-collapse:collapse;margin-top:6px;font-variant-numeric:tabular-nums}
+  th,td{text-align:right;padding:4px 2px;border-top:1px solid var(--line);white-space:nowrap}
+  th{color:var(--dim);font-weight:500;font-size:11px}
+  td:first-child,th:first-child{text-align:left}
   .btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:auto}
   button{border:0;border-radius:12px;padding:16px;font-size:16px;font-weight:600;color:var(--bg);background:var(--ink);font-family:inherit}
   button.main{grid-column:1 / -1;background:var(--acc)}
@@ -47,8 +67,6 @@
   button:focus-visible{outline:2px solid var(--vel);outline-offset:2px}
   #msg{font-size:13px;color:var(--dim);min-height:18px;text-align:center}
   #msg.ok{color:var(--ok)} #msg.err{color:var(--jrk)}
-  .legend{display:flex;gap:14px;font-size:12px;color:var(--dim);padding:0 4px}
-  .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
 </style>
 </head>
 <body>
@@ -58,9 +76,10 @@
 </header>
 
 <div class="tabs">
-  <button class="tab on" data-run="up"><span class="dot" id="dot-up"></span>상승</button>
-  <button class="tab" data-run="down"><span class="dot" id="dot-down"></span>하강</button>
+  <button class="tab on" data-dir="up">상승</button>
+  <button class="tab" data-dir="down">하강</button>
 </div>
+<div class="trials" id="trials"></div>
 
 <div class="readouts">
   <div class="ro" style="--c:var(--acc)"><div class="k">가속도</div><div class="v" id="a">0.00</div><div class="u">m/s²</div><div class="p"><em>max</em> <span id="amax">0.00</span><br><em>min</em> <span id="amin">0.00</span></div></div>
@@ -69,22 +88,36 @@
 </div>
 
 <canvas id="cv"></canvas>
-<div class="legend"><span><i style="background:var(--acc)"></i>가속도</span><span><i style="background:var(--vel)"></i>속도</span><span><i style="background:var(--jrk)"></i>저크</span></div>
+<div class="legend">
+  <span id="lg-time"><button class="lg on" data-tr="a"><i style="background:var(--acc)"></i>가속도</button><button class="lg on" data-tr="v"><i style="background:var(--vel)"></i>속도</button><button class="lg on" data-tr="j"><i style="background:var(--jrk)"></i>저크</button><button class="lg" data-tr="ar"><i style="background:#8d9ab0"></i>원시</button></span>
+  <span id="lg-fft" style="display:none"><i style="background:var(--acc)"></i>원시 가속도 스펙트럼</span>
+  <span class="spacer"></span>
+  <span class="seg"><button class="on" data-view="time">시간</button><button data-view="fft">스펙트럼</button></span>
+</div>
 
 <div class="stats">
   <div><b>주행 시간</b> <span id="dur">0.0 s</span></div>
   <div><b>이동 거리</b> <span id="dist">0.00 m</span></div>
-  <div><b>속도 드리프트 보정</b> <span id="bias">—</span></div>
+  <div><b>드리프트 보정</b> <span id="bias">—</span></div>
   <div><b>샘플 수</b> <span id="n">0</span></div>
+  <div id="peaks"></div>
 </div>
 
 <div class="row">
-  <label for="fc">저역통과 차단주파수</label>
+  <label for="fc">LPF</label>
   <select id="fc"><option value="2">2 Hz</option><option value="3" selected>3 Hz</option><option value="5">5 Hz</option><option value="8">8 Hz</option></select>
-  <div class="spacer"></div>
-  <label for="jfc">저크 필터</label>
+  <label for="jfc">저크</label>
   <select id="jfc"><option value="1">1 Hz</option><option value="2" selected>2 Hz</option><option value="4">4 Hz</option></select>
+  <span class="spacer"></span>
+  <label for="rate">샘플링</label>
+  <select id="rate"><option value="0">자동(60)</option><option value="100">100 Hz</option><option value="200" selected>200 Hz</option><option value="400">400 Hz</option></select>
+  <label for="auto">자동정지</label>
+  <select id="auto"><option value="0">끔</option><option value="1" selected>1 s</option><option value="2">2 s</option><option value="3">3 s</option><option value="5">5 s</option><option value="10">10 s</option><option value="15">15 s</option><option value="20">20 s</option><option value="30">30 s</option><option value="45">45 s</option><option value="60">60 s</option></select>
+  <label for="fseg">FFT 구간</label>
+  <select id="fseg"><option value="const" selected>등속</option><option value="acc">가속</option><option value="dec">감속</option><option value="all">전체</option></select>
 </div>
+
+<details><summary>시험 결과 요약 (전 회차)</summary><table id="sum"></table></details>
 
 <div id="msg"></div>
 
@@ -101,35 +134,89 @@
   const $ = id => document.getElementById(id);
   const msg = (t, cls='') => { $('msg').textContent = t; $('msg').className = cls; };
   const IDLE_MSG = '휴대폰을 카 바닥이나 손잡이에 고정하고, 정지 상태에서 시작을 누르세요.';
-  const LABEL = { up:'상승', down:'하강' };
+  const DIR = { up:'상승', down:'하강' };
+  const label = k => DIR[k.dir] + ' ' + k.n + '회';
+  const kid = k => k.dir + k.n;
 
-  // 탭별 독립 데이터
+  // ---- 데이터: runs['up1'..'down5'] ----
   const newRun = () => ({ S:[], state:'idle', fsEst:0, bias:null, src:null });
-  const runs = { up:newRun(), down:newRun() };
-  let cur = 'up';          // 표시 중인 탭
-  let recRun = null;       // 기록 중인 탭 키 (기록은 시작 당시 탭에 귀속)
+  let runs = {}, nTrials = 3;
+  let cur = { dir:'up', n:1 };   // 표시 중
+  let recKey = null;             // 기록 중인 run id
+  let view = 'time';
+  const show = { a:true, v:true, j:true, ar:false };
+  const R_ = k => runs[k] || (runs[k] = newRun());
 
-  // 기록 중 임시 상태
+  // ---- 영속 저장 (기기 브라우저 로컬) ----
+  function save() {
+    try {
+      const o = { nTrials, runs:{} };
+      for (const k in runs) if (runs[k].S.length && runs[k].state === 'done')
+        o.runs[k] = { S:runs[k].S.map(p => [p.t,p.ar,p.a,p.v,p.j,p.s].map(x => +x.toFixed(4))), fsEst:runs[k].fsEst, bias:runs[k].bias, src:runs[k].src };
+      localStorage.setItem('erm2', JSON.stringify(o));
+    } catch(_) {}
+  }
+  function load() {
+    try {
+      const o = JSON.parse(localStorage.getItem('erm2') || 'null'); if (!o) return;
+      nTrials = o.nTrials || 3;
+      for (const k in o.runs) { const r = newRun(); r.S = o.runs[k].S.map(x => ({t:x[0],ar:x[1],a:x[2],v:x[3],j:x[4],s:x[5]})); r.fsEst = o.runs[k].fsEst; r.bias = o.runs[k].bias; r.src = o.runs[k].src; r.state = 'done'; runs[k] = r; }
+    } catch(_) {}
+  }
+
+  // ---- 기록 ----
   let ghat = null, gmag = 9.81, calibBuf = [];
   let t0 = 0, lastT = 0, lastA = 0, v = 0, s = 0;
   const aSt = [0,0], jSt = [0,0];
   let wake = null, raf = 0;
+  let phase = 'wait', phT = 0, sA = 0; // 자동정지 상태기계
+  let sensor = null, srcName = '';
+
+  // 고주파 경로: Generic Sensor API(Accelerometer) 우선, 실패 시 devicemotion(60 Hz 상한)
+  async function startSensor() {
+    const want = +$('rate').value;
+    if (want > 0 && 'Accelerometer' in window) {
+      try {
+        if (navigator.permissions) {
+          const st = await navigator.permissions.query({ name:'accelerometer' });
+          if (st.state === 'denied') throw new Error('denied');
+        }
+        const sn = new Accelerometer({ frequency: want, referenceFrame: 'device' });
+        await new Promise((res, rej) => {
+          let ok = false;
+          sn.onreading = () => { ok = true; res(); };
+          sn.onerror = ev => rej(ev.error || new Error('sensor error'));
+          sn.start();
+          setTimeout(() => ok || rej(new Error('no reading')), 1200);
+        });
+        sn.onreading = () => onSample(sn.x, sn.y, sn.z);
+        sensor = sn; srcName = 'Sensor API';
+        return true;
+      } catch (e) { try { sensor?.stop(); } catch(_) {} sensor = null; }
+    }
+    window.addEventListener('devicemotion', onMotion);
+    srcName = 'DeviceMotion'; return true;
+  }
+  function stopSensor() {
+    if (sensor) { try { sensor.onreading = null; sensor.stop(); } catch(_) {} sensor = null; }
+    window.removeEventListener('devicemotion', onMotion);
+  }
 
   function lpf(x, dt, fc, st) {
     const rc = 1 / (2 * Math.PI * fc), al = dt / (rc + dt);
-    st[0] += al * (x - st[0]);
-    st[1] += al * (st[0] - st[1]);
-    return st[1];
+    st[0] += al * (x - st[0]); st[1] += al * (st[0] - st[1]); return st[1];
   }
 
   function onMotion(e) {
     const g = e.accelerationIncludingGravity;
-    if (!g || g.x == null || !recRun) return;
-    const R = runs[recRun];
-    const now = performance.now() / 1000;
-
+    if (!g || g.x == null) return;
+    onSample(g.x, g.y, g.z);
+  }
+  function onSample(gx, gy, gz) {
+    if (!recKey) return;
+    const R = runs[recKey], now = performance.now() / 1000;
     if (R.state === 'calib') {
-      calibBuf.push([g.x, g.y, g.z, now]);
+      calibBuf.push([gx, gy, gz, now]);
       if (now - calibBuf[0][3] >= 2.0) {
         const n = calibBuf.length;
         const m = calibBuf.reduce((p,c)=>[p[0]+c[0],p[1]+c[1],p[2]+c[2]],[0,0,0]).map(x=>x/n);
@@ -137,34 +224,49 @@
         R.fsEst = n / (now - calibBuf[0][3]);
         aSt[0]=aSt[1]=0; jSt[0]=jSt[1]=0;
         t0 = now; lastT = now; lastA = 0; v = 0; s = 0; R.S = [];
-        R.state = 'rec';
-        refreshUI();
-        msg(`[${LABEL[recRun]}] 영점 완료 (|g| = ${gmag.toFixed(3)} m/s²). 기록 중 — 주행이 끝나면 정지를 누르세요.`, 'ok');
+        phase = 'wait'; phT = 0; sA = 0;
+        R.state = 'rec'; refreshUI(); setPhase();
+        msg(`[${label(cur)}] 영점 완료 · ${srcName} ${R.fsEst.toFixed(0)} Hz (|g| = ${gmag.toFixed(3)}). 기록 중 — 주행 후 정지.`, 'ok');
         raf = requestAnimationFrame(draw);
       }
       return;
     }
     if (R.state !== 'rec') return;
-
     const dt = now - lastT; if (dt <= 0 || dt > 0.5) { lastT = now; return; }
     lastT = now;
     const t = now - t0;
-    const ar = g.x*ghat[0] + g.y*ghat[1] + g.z*ghat[2] - gmag;
+    const ar = gx*ghat[0] + gy*ghat[1] + gz*ghat[2] - gmag;
     const a = lpf(ar, dt, +$('fc').value, aSt);
     const j = lpf((a - lastA) / dt, dt, +$('jfc').value, jSt);
-    v += (a + lastA) / 2 * dt;
-    s += v * dt;
-    lastA = a;
+    v += (a + lastA) / 2 * dt; s += v * dt; lastA = a;
     R.S.push({t, ar, a, v, j, s});
-  }
 
-  function finish() {
-    const key = recRun, R = runs[key];
-    window.removeEventListener('devicemotion', onMotion);
+    // 자동 정지: 속도 패턴 인식. 가속(부호 sA) → [등속] → 감속(부호 -sA) → 정지(|a|<0.05 가 hold 초 지속)
+    const hold = +$('auto').value;
+    if (hold > 0) {
+      const HI = 0.15, LO = 0.05;
+      if (phase === 'wait') {
+        if (Math.abs(a) > HI) { phT += dt; if (phT >= 0.3) { phase = 'acc'; sA = Math.sign(a); phT = 0; setPhase(); } } else phT = 0;
+      } else if (phase === 'acc' || phase === 'cruise') {
+        if (a * sA < -HI) { phT += dt; if (phT >= 0.3) { phase = 'dec'; phT = 0; setPhase(); } }
+        else { phT = 0; if (phase === 'acc' && Math.abs(a) < LO) { phase = 'cruise'; setPhase(); } }
+      } else if (phase === 'dec') {
+        if (Math.abs(a) < LO) { phT += dt; if (phT >= hold) { finish(true); return; } }
+        else if (a * sA < -HI) phT = 0;   // 아직 감속 중
+        else phT = 0;
+      }
+    }
+  }
+  const PH = { wait:'대기', acc:'가속', cruise:'등속', dec:'감속' };
+  function setPhase() { if (recKey) $('fs').textContent = runs[recKey].fsEst.toFixed(0) + ' Hz · ' + PH[phase]; }
+
+  function finish(auto) {
+    const key = recKey, R = runs[key];
+    stopSensor();
     cancelAnimationFrame(raf);
     if (wake) { wake.release(); wake = null; }
-    recRun = null;
-    if (R.S.length < 10) { R.state = 'idle'; R.S = []; refreshUI(); msg('데이터가 부족합니다. 다시 시도하세요.', 'err'); return; }
+    recKey = null;
+    if (R.S.length < 10) { runs[key] = newRun(); refreshUI(); msg('데이터가 부족합니다. 다시 시도하세요.', 'err'); return; }
     const S = R.S, T = S[S.length-1].t, bias = S[S.length-1].v / T;
     let vv = 0, ss = 0;
     for (let i = 0; i < S.length; i++) {
@@ -173,86 +275,201 @@
       p.v = vv; p.s = ss;
     }
     R.bias = bias; R.state = 'done'; R.src = null;
-    cur = key; refreshUI();
-    msg(`[${LABEL[key]}] 기록 종료. 종료 시 정지 조건으로 드리프트 보정했습니다.`, 'ok');
+    save(); refreshUI();
+    msg(`[${label(cur)}] ${auto ? '정지 감지 → 자동 종료' : '기록 종료'}. 종료 시 정지 조건으로 드리프트 보정했습니다.`, 'ok');
+    if (auto && navigator.vibrate) navigator.vibrate([80,60,80]);
   }
 
+  // ---- 통계 ----
+  function stats(S) {
+    let o = {aMx:-1e9,aMn:1e9,vMx:-1e9,vMn:1e9,jMx:-1e9,jMn:1e9};
+    for (const q of S) { o.aMx=Math.max(o.aMx,q.a); o.aMn=Math.min(o.aMn,q.a); o.vMx=Math.max(o.vMx,q.v); o.vMn=Math.min(o.vMn,q.v); o.jMx=Math.max(o.jMx,q.j); o.jMn=Math.min(o.jMn,q.j); }
+    return o;
+  }
   function updateStats() {
-    const R = runs[cur], S = R.S;
-    const z = () => { for (const id of ['a','v','j','amax','vmax','jmax','amin','vmin','jmin']) $(id).textContent = '0.00';
-      $('dur').textContent='0.0 s'; $('dist').textContent='0.00 m'; $('n').textContent='0'; };
-    if (!S.length) { z(); $('bias').textContent = '—'; return; }
-    const p = S[S.length-1];
-    let aMx=-1e9,aMn=1e9,vMx=-1e9,vMn=1e9,jMx=-1e9,jMn=1e9;
-    for (const q of S) { aMx=Math.max(aMx,q.a); aMn=Math.min(aMn,q.a); vMx=Math.max(vMx,q.v); vMn=Math.min(vMn,q.v); jMx=Math.max(jMx,q.j); jMn=Math.min(jMn,q.j); }
+    const R = R_(kid(cur)), S = R.S;
+    if (!S.length) {
+      for (const id of ['a','v','j','amax','vmax','jmax','amin','vmin','jmin']) $(id).textContent = '0.00';
+      $('dur').textContent='0.0 s'; $('dist').textContent='0.00 m'; $('n').textContent='0'; $('bias').textContent='—'; return;
+    }
+    const p = S[S.length-1], o = stats(S);
     $('a').textContent = p.a.toFixed(2); $('v').textContent = p.v.toFixed(2); $('j').textContent = p.j.toFixed(2);
-    $('amax').textContent = aMx.toFixed(2); $('amin').textContent = aMn.toFixed(2);
-    $('vmax').textContent = vMx.toFixed(2); $('vmin').textContent = vMn.toFixed(2);
-    $('jmax').textContent = jMx.toFixed(2); $('jmin').textContent = jMn.toFixed(2);
-    $('dur').textContent = p.t.toFixed(1) + ' s';
-    $('dist').textContent = p.s.toFixed(2) + ' m';
-    $('n').textContent = S.length;
+    $('amax').textContent = o.aMx.toFixed(2); $('amin').textContent = o.aMn.toFixed(2);
+    $('vmax').textContent = o.vMx.toFixed(2); $('vmin').textContent = o.vMn.toFixed(2);
+    $('jmax').textContent = o.jMx.toFixed(2); $('jmin').textContent = o.jMn.toFixed(2);
+    $('dur').textContent = p.t.toFixed(1) + ' s'; $('dist').textContent = p.s.toFixed(2) + ' m'; $('n').textContent = S.length;
     $('bias').textContent = R.src ? '(파일)' : R.bias == null ? '—' : (R.bias*1000).toFixed(1) + ' mm/s²';
   }
+  function updateSummary() {
+    let h = '<tr><th>회차</th><th>a max/min</th><th>v max/min</th><th>j max/min</th><th>거리</th></tr>';
+    for (const dir of ['up','down']) for (let n = 1; n <= nTrials; n++) {
+      const R = runs[dir+n];
+      if (!R || !R.S.length) { h += `<tr><td>${DIR[dir]} ${n}</td><td colspan="4" style="color:var(--dim)">—</td></tr>`; continue; }
+      const o = stats(R.S), f = x => x.toFixed(2);
+      h += `<tr><td>${DIR[dir]} ${n}</td><td>${f(o.aMx)} / ${f(o.aMn)}</td><td>${f(o.vMx)} / ${f(o.vMn)}</td><td>${f(o.jMx)} / ${f(o.jMn)}</td><td>${f(R.S[R.S.length-1].s)}</td></tr>`;
+    }
+    $('sum').innerHTML = h;
+  }
 
+  // ---- FFT ----
+  function fft(re, im) {
+    const n = re.length;
+    for (let i = 1, j = 0; i < n; i++) { let bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit;
+      if (i < j) { [re[i],re[j]] = [re[j],re[i]]; [im[i],im[j]] = [im[j],im[i]]; } }
+    for (let len = 2; len <= n; len <<= 1) {
+      const ang = -2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang);
+      for (let i = 0; i < n; i += len) {
+        let cr = 1, ci = 0;
+        for (let k = 0; k < len/2; k++) {
+          const ur = re[i+k], ui = im[i+k], xr = re[i+k+len/2], xi = im[i+k+len/2];
+          const vr = xr*cr - xi*ci, vi = xr*ci + xi*cr;
+          re[i+k] = ur+vr; im[i+k] = ui+vi; re[i+k+len/2] = ur-vr; im[i+k+len/2] = ui-vi;
+          const t = cr*wr - ci*wi; ci = cr*wi + ci*wr; cr = t;
+        }
+      }
+    }
+  }
+  // 구간 분할: 최초 |a|>0.1 m/s² 이후 ~ |v|가 최대의 90%에 처음 도달 = 가속,
+  // 마지막으로 90% 이상인 지점 ~ 마지막 |a|>0.1 = 감속, 그 사이 = 등속
+  function segments(S) {
+    const n = S.length; if (n < 10) return null;
+    let vm = 0; for (const p of S) vm = Math.max(vm, Math.abs(p.v));
+    if (vm < 0.05) return null;
+    let i0 = 0; while (i0 < n && Math.abs(S[i0].a) < 0.1) i0++;
+    let i3 = n-1; while (i3 > 0 && Math.abs(S[i3].a) < 0.1) i3--;
+    let i1 = i0; while (i1 < n && Math.abs(S[i1].v) < 0.9*vm) i1++;
+    let i2 = i3; while (i2 > 0 && Math.abs(S[i2].v) < 0.9*vm) i2--;
+    if (!(i0 < i1 && i1 <= i2 && i2 < i3)) return null;
+    return { acc:[i0,i1], const:[i1,i2], dec:[i2,i3], all:[0,n-1] };
+  }
+  const SEGNAME = { acc:'가속', const:'등속', dec:'감속', all:'전체' };
+  function spectrum(R) {
+    const full = R.S; if (full.length < 32) return null;
+    const want = $('fseg').value, seg = segments(full);
+    let S = full, used = 'all';
+    if (want !== 'all' && seg) { const [a,b] = seg[want]; if (b-a+1 >= 32) { S = full.slice(a, b+1); used = want; } }
+    const fs = (S.length-1) / (S[S.length-1].t - S[0].t);
+    const mean = S.reduce((a,p)=>a+p.ar,0)/S.length;
+    let n = 1; while (n < S.length) n <<= 1;
+    const re = new Float64Array(n), im = new Float64Array(n);
+    for (let i = 0; i < S.length; i++) { const w = 0.5 - 0.5*Math.cos(2*Math.PI*i/(S.length-1)); re[i] = (S[i].ar - mean) * w; }
+    fft(re, im);
+    const half = n/2, amp = new Float64Array(half), df = fs/n;
+    for (let k = 0; k < half; k++) amp[k] = 2 * Math.hypot(re[k], im[k]) / (S.length * 0.5); // Hann 코히런트 게인 0.5 보정
+    const peaks = [];
+    for (let k = 2; k < half-1; k++) if (k*df >= 0.3 && amp[k] > amp[k-1] && amp[k] >= amp[k+1]) peaks.push({f:k*df, a:amp[k]});
+    peaks.sort((x,y) => y.a - x.a);
+    const dur = S[S.length-1].t - S[0].t;
+    return { amp, df, fs, peaks: peaks.slice(0,5), nSeg:S.length, dur, seg: SEGNAME[used], fallback: used !== want };
+  }
+
+  // ---- 그리기 ----
   const cv = $('cv'), ctx = cv.getContext('2d');
   function draw() {
-    const R = runs[cur], S = R.S;
+    const R = R_(kid(cur)), S = R.S;
     const dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
     if (cv.width !== W*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
     ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
-    const padL=8, padR=8, padT=10, padB=18, w = W-padL-padR, h = H-padT-padB, mid = padT + h/2;
+    const padL=8, padR=8, padT=10, padB=18, w = W-padL-padR, h = H-padT-padB;
+    ctx.font = '11px system-ui'; ctx.fillStyle = '#8d9ab0';
+    const empty = t => { ctx.font = '13px system-ui'; ctx.textAlign = 'center'; ctx.fillText(t, W/2, H/2 - 6); };
+
+    if (view === 'fft') {
+      $('peaks').style.display = 'block';
+      const sp = R.state === 'done' ? spectrum(R) : null;
+      if (!sp) { empty(`${label(cur)} 스펙트럼 없음 (기록 완료 후 표시)`); $('peaks').innerHTML = ''; return; }
+      const fmax = sp.fs/2, base = padT + h;
+      let am = 0; for (let k = 1; k < sp.amp.length; k++) am = Math.max(am, sp.amp[k]); am = am || 1;
+      ctx.strokeStyle = '#2b3648'; ctx.lineWidth = 1;
+      const step = fmax > 120 ? 50 : fmax > 60 ? 25 : fmax > 35 ? 10 : 5;
+      for (let f = step; f < fmax; f += step) { const x = padL + f/fmax*w; ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,base); ctx.stroke(); ctx.textAlign='center'; ctx.fillText(f+'', x, H-4); }
+      ctx.strokeStyle = '#f2b33d'; ctx.lineWidth = 1.6; ctx.beginPath();
+      for (let k = 1; k < sp.amp.length; k++) { const x = padL + k*sp.df/fmax*w, y = base - sp.amp[k]/am*h; k===1 ? ctx.moveTo(x,y) : ctx.lineTo(x,y); }
+      ctx.stroke();
+      ctx.fillStyle = '#ff7d6e';
+      for (const p of sp.peaks.slice(0,3)) { const x = padL + p.f/fmax*w, y = base - p.a/am*h; ctx.beginPath(); ctx.arc(x,y,3,0,7); ctx.fill(); }
+      ctx.fillStyle = '#8d9ab0'; ctx.textAlign = 'right'; ctx.fillText(`${sp.seg}${sp.fallback?'(구간 부족→전체)':''} ${sp.dur.toFixed(1)}s ${sp.nSeg}샘플 @${sp.fs.toFixed(0)}Hz  Δf ${sp.df.toFixed(2)}Hz  peak ${am.toFixed(3)} m/s²`, W-padR, padT+10);
+      ctx.textAlign = 'left'; ctx.fillText('Hz', padL, H-4);
+      $('peaks').innerHTML = '<b>피크</b> ' + sp.peaks.map(p => `<span>${p.f.toFixed(2)} Hz · ${p.a.toFixed(3)}</span>`).join('');
+      return;
+    }
+
+    $('peaks').style.display = 'none';
+    const mid = padT + h/2;
     ctx.strokeStyle = '#2b3648'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(padL, mid); ctx.lineTo(padL+w, mid); ctx.stroke();
     if (S.length > 1) {
       const T = Math.max(S[S.length-1].t, 5);
       const trace = (key, color, scale) => {
         ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.beginPath();
-        for (let i = 0; i < S.length; i++) {
-          const x = padL + S[i].t / T * w, y = mid - S[i][key] / scale * (h/2);
-          i ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
-        }
+        for (let i = 0; i < S.length; i++) { const x = padL + S[i].t / T * w, y = mid - S[i][key] / scale * (h/2); i ? ctx.lineTo(x,y) : ctx.moveTo(x,y); }
         ctx.stroke();
       };
       let am=0.5, vm=0.5, jm=0.5;
       for (const q of S) { am = Math.max(am, Math.abs(q.a)); vm = Math.max(vm, Math.abs(q.v)); jm = Math.max(jm, Math.abs(q.j)); }
-      trace('j', '#ff7d6e', jm*1.1); trace('v', '#5cc8ff', vm*1.1); trace('a', '#f2b33d', am*1.1);
-      ctx.fillStyle = '#8d9ab0'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
-      ctx.fillText(`±${am.toFixed(1)} m/s²  ±${vm.toFixed(2)} m/s  ±${jm.toFixed(1)} m/s³`, W-padR, H-4);
-      ctx.textAlign = 'left'; ctx.fillText(`${LABEL[cur]}  0 – ${T.toFixed(0)} s`, padL, H-4);
-    } else {
-      ctx.fillStyle = '#8d9ab0'; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
-      ctx.fillText(`${LABEL[cur]} 데이터 없음`, W/2, mid - 6);
-    }
-    if (R.state === 'rec' && recRun === cur) { updateStats(); raf = requestAnimationFrame(draw); }
+      const seg = R.state === 'done' ? segments(S) : null;
+      if (seg) {
+        ctx.strokeStyle = '#3f4d63'; ctx.setLineDash([3,3]); ctx.lineWidth = 1;
+        for (const i of [seg.acc[0], seg.acc[1], seg.dec[0], seg.dec[1]]) { const x = padL + S[i].t/T*w; ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,padT+h); ctx.stroke(); }
+        ctx.setLineDash([]); ctx.fillStyle = '#5d6b82'; ctx.textAlign = 'center';
+        const lab = (a,b,t) => ctx.fillText(t, padL + (S[a].t+S[b].t)/2/T*w, padT+10);
+        lab(seg.acc[0], seg.acc[1], '가속'); lab(seg.const[0], seg.const[1], '등속'); lab(seg.dec[0], seg.dec[1], '감속');
+      }
+      if (show.ar) trace('ar', '#5d6b82', am*1.1);
+      if (show.j) trace('j', '#ff7d6e', jm*1.1); if (show.v) trace('v', '#5cc8ff', vm*1.1); if (show.a) trace('a', '#f2b33d', am*1.1);
+      ctx.fillStyle = '#8d9ab0'; ctx.textAlign = 'right';
+      ctx.fillText([show.a||show.ar ? `±${am.toFixed(1)} m/s²` : '', show.v ? `±${vm.toFixed(2)} m/s` : '', show.j ? `±${jm.toFixed(1)} m/s³` : ''].filter(Boolean).join('  '), W-padR, H-4);
+      ctx.textAlign = 'left'; ctx.fillText(`${label(cur)}  0 – ${T.toFixed(0)} s`, padL, H-4);
+    } else empty(`${label(cur)} 데이터 없음`);
+    if (R.state === 'rec' && recKey === kid(cur)) { updateStats(); raf = requestAnimationFrame(draw); }
   }
 
-  function refreshUI() {
-    const R = runs[cur];
-    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.run === cur));
-    for (const k of ['up','down']) {
-      const d = $('dot-'+k), st = runs[k].state;
-      d.className = 'dot' + (st === 'rec' || st === 'calib' ? ' rec' : runs[k].S.length ? ' has' : '');
+  // ---- UI ----
+  function buildTrials() {
+    const box = $('trials'); box.innerHTML = '';
+    for (let n = 1; n <= nTrials; n++) {
+      const b = document.createElement('button'); b.className = 'chip'; b.dataset.n = n;
+      b.innerHTML = `<span class="dot"></span>${n}회`;
+      b.onclick = () => { cur = {dir:cur.dir, n}; refreshUI(); };
+      box.appendChild(b);
     }
+    const sel = document.createElement('select'); sel.title = '회차 수';
+    for (let n = 1; n <= 5; n++) { const o = document.createElement('option'); o.value = n; o.textContent = n+'회'; if (n === nTrials) o.selected = true; sel.appendChild(o); }
+    sel.onchange = () => { nTrials = +sel.value; if (cur.n > nTrials) cur.n = nTrials; save(); buildTrials(); refreshUI(); };
+    box.appendChild(sel);
+  }
+  function refreshUI() {
+    const key = kid(cur), R = R_(key);
+    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.dir === cur.dir));
+    document.querySelectorAll('.chip').forEach(b => {
+      const k = cur.dir + b.dataset.n, r = runs[k];
+      b.classList.toggle('on', +b.dataset.n === cur.n);
+      b.querySelector('.dot').className = 'dot' + (recKey === k ? ' rec' : r && r.S.length ? ' has' : '');
+    });
     $('fs').textContent = R.fsEst ? R.fsEst.toFixed(0) + ' Hz' : '— Hz';
     const go = $('go'); go.classList.remove('stop');
-    if (recRun) {                         // 어딘가 기록 중
-      go.disabled = recRun !== cur;
-      go.textContent = recRun === cur ? '정지' : `${LABEL[recRun]} 기록 중`;
-      if (recRun === cur) go.classList.add('stop');
-    } else {
-      go.disabled = false;
-      go.textContent = R.S.length ? `${LABEL[cur]} 다시 측정` : `${LABEL[cur]} 시작`;
-    }
-    $('csv').disabled = !R.S.length || recRun === cur;
-    $('reset').disabled = !R.S.length || !!recRun;
-    $('load').disabled = !!recRun;
-    updateStats(); draw();
+    if (recKey) {
+      go.disabled = recKey !== key;
+      go.textContent = recKey === key ? '정지' : `${label({dir:recKey.replace(/\d+$/,''), n:+recKey.match(/\d+$/)[0]})} 기록 중`;
+      if (recKey === key) go.classList.add('stop');
+    } else { go.disabled = false; go.textContent = R.S.length ? `${label(cur)} 다시 측정` : `${label(cur)} 시작`; }
+    $('csv').disabled = !R.S.length || recKey === key;
+    $('reset').disabled = !R.S.length || !!recKey;
+    $('load').disabled = !!recKey;
+    updateStats(); updateSummary(); draw();
+  }
+  function setView(v) {
+    view = v;
+    document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
+    $('lg-time').style.display = v === 'time' ? '' : 'none';
+    $('lg-fft').style.display = v === 'fft' ? '' : 'none';
+    draw();
   }
 
   async function start() {
-    if (recRun === cur) return finish();
-    if (recRun) return;
+    const key = kid(cur);
+    if (recKey === key) return finish();
+    if (recKey) return;
     try {
       if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
         const r = await DeviceMotionEvent.requestPermission();
@@ -261,64 +478,53 @@
       if (!('DeviceMotionEvent' in window)) { msg('이 브라우저는 모션 센서를 지원하지 않습니다.', 'err'); return; }
       if (!isSecureContext) { msg('HTTPS에서만 센서를 사용할 수 있습니다.', 'err'); return; }
       try { wake = await navigator.wakeLock?.request('screen'); } catch(_) {}
-      const R = runs[cur]; R.S = []; R.bias = null; R.src = null; R.fsEst = 0; R.state = 'calib';
-      recRun = cur; calibBuf = [];
-      window.addEventListener('devicemotion', onMotion);
-      refreshUI();
-      msg(`[${LABEL[cur]}] 영점 잡는 중… 2초간 움직이지 마세요.`);
-      setTimeout(() => { if (runs[recRun]?.state === 'calib' && calibBuf.length === 0) msg('센서 데이터가 들어오지 않습니다. Chrome에서 열었는지 확인하세요.', 'err'); }, 1500);
+      runs[key] = newRun(); runs[key].state = 'calib';
+      recKey = key; calibBuf = []; setView('time');
+      await startSensor();
+      refreshUI(); msg(`[${label(cur)}] 영점 잡는 중… 2초간 움직이지 마세요.`);
+      msg(`[${label(cur)}] 영점 잡는 중… (${srcName}) 2초간 움직이지 마세요.`);
+      setTimeout(() => { if (runs[recKey]?.state === 'calib' && calibBuf.length === 0) msg('센서 데이터가 들어오지 않습니다. Chrome에서 열었는지 확인하세요.', 'err'); }, 1500);
     } catch (e) { msg('시작 실패: ' + e.message, 'err'); }
   }
-
-  function reset() {
-    if (recRun) return;
-    runs[cur] = newRun();
-    refreshUI(); msg(`[${LABEL[cur]}] 초기화됨.`);
-  }
+  function reset() { if (recKey) return; runs[kid(cur)] = newRun(); save(); refreshUI(); msg(`[${label(cur)}] 초기화됨.`); }
 
   function exportCsv() {
-    const S = runs[cur].S; if (!S.length) return;
+    const S = R_(kid(cur)).S; if (!S.length) return;
     const rows = ['t_s,a_raw_mps2,a_filt_mps2,v_mps,jerk_mps3,s_m'];
     for (const p of S) rows.push([p.t.toFixed(4), p.ar.toFixed(4), p.a.toFixed(4), p.v.toFixed(4), p.j.toFixed(4), p.s.toFixed(4)].join(','));
     const blob = new Blob([rows.join('\n')], {type:'text/csv'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `elevator_${cur}_` + new Date().toISOString().replace(/[:.]/g,'-').slice(0,19) + '.csv';
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `elevator_${kid(cur)}_` + new Date().toISOString().replace(/[:.]/g,'-').slice(0,19) + '.csv';
     a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
-
   function importCsv(file) {
     const rd = new FileReader();
     rd.onload = () => {
       const lines = rd.result.split(/\r?\n/).filter(l => l.trim());
-      const head = lines[0].split(',').map(h => h.trim());
-      const col = n => head.indexOf(n);
+      const head = lines[0].split(',').map(h => h.trim()), col = n => head.indexOf(n);
       const iT=col('t_s'), iAr=col('a_raw_mps2'), iA=col('a_filt_mps2'), iV=col('v_mps'), iJ=col('jerk_mps3'), iS=col('s_m');
-      if (iT<0 || iA<0) { msg('이 앱에서 저장한 CSV 형식이 아닙니다 (t_s, a_filt_mps2 열 필요).', 'err'); return; }
+      if (iT<0 || iA<0) { msg('이 앱에서 저장한 CSV 형식이 아닙니다.', 'err'); return; }
       const out = [];
-      for (let i = 1; i < lines.length; i++) {
-        const c = lines[i].split(',').map(Number);
-        if (!isFinite(c[iT])) continue;
-        out.push({t:c[iT], ar:iAr>=0?c[iAr]:c[iA], a:c[iA], v:iV>=0?c[iV]:0, j:iJ>=0?c[iJ]:0, s:iS>=0?c[iS]:0});
-      }
+      for (let i = 1; i < lines.length; i++) { const c = lines[i].split(',').map(Number); if (!isFinite(c[iT])) continue;
+        out.push({t:c[iT], ar:iAr>=0?c[iAr]:c[iA], a:c[iA], v:iV>=0?c[iV]:0, j:iJ>=0?c[iJ]:0, s:iS>=0?c[iS]:0}); }
       if (out.length < 2) { msg('데이터 행이 없습니다.', 'err'); return; }
-      // 파일명에 up/down 이 있으면 해당 탭으로, 없으면 현재 탭으로
-      const name = file.name.toLowerCase();
-      const key = /_down[_.]/.test(name) ? 'down' : /_up[_.]/.test(name) ? 'up' : cur;
-      const R = newRun(); R.S = out; R.state = 'done'; R.src = file.name;
-      R.fsEst = (out.length-1) / out[out.length-1].t;
-      runs[key] = R; cur = key;
-      refreshUI(); msg(`[${LABEL[key]}] 불러옴: ${file.name}`, 'ok');
+      const m = file.name.toLowerCase().match(/_(up|down)(\d)?[_.]/);
+      if (m) { cur = { dir:m[1], n: m[2] ? Math.min(+m[2], nTrials) || 1 : cur.n }; }
+      const R = newRun(); R.S = out; R.state = 'done'; R.src = file.name; R.fsEst = (out.length-1)/out[out.length-1].t;
+      runs[kid(cur)] = R; save(); refreshUI(); msg(`[${label(cur)}] 불러옴: ${file.name}`, 'ok');
     };
     rd.readAsText(file);
   }
 
-  document.querySelectorAll('.tab').forEach(b => b.onclick = () => { cur = b.dataset.run; refreshUI(); });
+  document.querySelectorAll('.tab').forEach(b => b.onclick = () => { cur = {dir:b.dataset.dir, n:cur.n}; refreshUI(); });
+  document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setView(b.dataset.view));
+  document.querySelectorAll('.lg').forEach(b => b.onclick = () => { const k = b.dataset.tr; show[k] = !show[k]; b.classList.toggle('on', show[k]); draw(); });
+  $('fseg').onchange = draw;
   $('load').onclick = () => $('file').click();
   $('file').onchange = e => { if (e.target.files[0]) importCsv(e.target.files[0]); e.target.value = ''; };
   $('go').onclick = start; $('reset').onclick = reset; $('csv').onclick = exportCsv;
   addEventListener('resize', draw);
-  refreshUI(); msg(IDLE_MSG);
+  load(); buildTrials(); refreshUI(); msg(IDLE_MSG);
 })();
 </script>
 </body>
