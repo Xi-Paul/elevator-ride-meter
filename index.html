@@ -787,13 +787,69 @@
     const xNoise = 0.5 * seBias * T * T + sd * Math.sqrt(T / fs) * T / Math.sqrt(3);
     let aPk = 0;
     for (let i = iBr; i <= iOn; i++) if (Math.abs(sm[i]) > Math.abs(aPk)) aPk = sm[i];
+    // 그래프용 트레이스: 개방 0.5 s 전 ~ 가속개시 0.5 s 후
+    const w0 = Math.max(0, iBr - Math.round(0.5 * fs));
+    const w1 = Math.min(S.length - 1, iOn + Math.round(0.25 * fs));
+    const tr = { t:[], a:[], v:[], x:[] };
+    let vv = 0, xx = 0;
+    for (let i = w0; i <= w1; i++) {
+      if (i > w0) {
+        const dt = S[i].t - S[i-1].t;
+        if (dt > 0 && dt < 0.2) { vv += ((aRaw[i]-b0) + (aRaw[i-1]-b0)) / 2 * dt; xx += vv * dt; }
+      }
+      tr.t.push(S[i].t - S[0].t); tr.a.push(sm[i]); tr.v.push(vv * 1000); tr.x.push(xx * 1000);
+    }
     return {
+      trace: tr,
       tBr: S[iBr].t - S[0].t, tOn: S[iOn].t - S[0].t, T,
       vPk, xPk, aPk, sd, xNoise, travel, dirSame: travel !== 0 && xSgn === travel,
       valid: Math.abs(xPk) > 3 * xNoise
     };
   }
   const rbDir = q => q.xPk === 0 ? '—' : (q.xPk > 0 ? '상승' : '하강') + (q.travel === 0 ? '' : q.dirSame ? ' (주행방향과 동일)' : ' (주행방향과 반대)');
+
+
+  function svgRollback(q) {
+    const tr = q.trace; if (!tr || tr.t.length < 4) return '';
+    const W = 760, H = 210, L = 46, Rp = 46, T = 14, B = 26;
+    const w = W-L-Rp, h = H-T-B, t0 = tr.t[0], t1 = tr.t[tr.t.length-1], dur = Math.max(t1-t0, 1e-3);
+    const X = t => L + (t - t0) / dur * w;
+    // 스케일은 롤백 구간(가속 개시 이전)만으로 정해 미소 거동이 묻히지 않게 한다
+    let aM = 0.05, xM = 0.5;
+    for (let i = 0; i < tr.t.length; i++) {
+      if (tr.t[i] > q.tOn) break;
+      aM = Math.max(aM, Math.abs(tr.a[i]));
+      xM = Math.max(xM, Math.abs(tr.x[i]), Math.abs(tr.v[i])/10);
+    }
+    const midA = T + h/2;
+    const clamp = y => Math.max(T, Math.min(T + h, y));
+    const YA = v => clamp(midA - v / (aM*1.15) * (h/2));
+    const YX = v => clamp(midA - v / (xM*1.15) * (h/2));
+    let g = `<line x1="${L}" y1="${midA}" x2="${L+w}" y2="${midA}" stroke="#c8ceda"/>`;
+    // 시간 눈금
+    const step = dur > 2 ? 0.5 : dur > 1 ? 0.2 : 0.1;
+    for (let t = Math.ceil(t0/step)*step; t <= t1; t += step)
+      g += `<line x1="${X(t)}" y1="${T}" x2="${X(t)}" y2="${T+h}" stroke="#eceff4"/><text x="${X(t)}" y="${H-8}" font-size="10" fill="#6b7383" text-anchor="middle">${t.toFixed(1)}</text>`;
+    // 경계
+    for (const [tt, lab, col] of [[q.tBr,'브레이크 개방','#d9534f'], [q.tOn,'가속 개시','#2b7fc4']]) {
+      g += `<line x1="${X(tt)}" y1="${T}" x2="${X(tt)}" y2="${T+h}" stroke="${col}" stroke-dasharray="4 3"/>`;
+      g += `<text x="${X(tt)+3}" y="${T+11}" font-size="10" fill="${col}">${lab}</text>`;
+    }
+    const poly = (arr, Y, col, dash) => {
+      let pts = '';
+      for (let i = 0; i < tr.t.length; i++) pts += `${X(tr.t[i]).toFixed(1)},${Y(arr[i]).toFixed(1)} `;
+      return `<polyline fill="none" stroke="${col}" stroke-width="1.5" ${dash?'stroke-dasharray="3 2"':''} points="${pts}"/>`;
+    };
+    g += poly(tr.v.map(u => u/10), YX, '#2b7fc4', true);
+    g += poly(tr.x, YX, '#1a9e6a', false);
+    g += poly(tr.a, YA, '#d99a1a', false);
+    // 축 라벨
+    g += `<text x="4" y="${T+10}" font-size="10" fill="#d99a1a">a ±${aM.toFixed(2)} m/s²</text>`;
+    g += `<text x="${W-4}" y="${T+10}" font-size="10" fill="#1a9e6a" text-anchor="end">x ±${xM.toFixed(1)} mm</text>`;
+    g += `<text x="${W-4}" y="${T+22}" font-size="10" fill="#2b7fc4" text-anchor="end">v ±${(xM*10).toFixed(0)} mm/s</text>`;
+    g += `<text x="${L}" y="${H-8}" font-size="10" fill="#6b7383">s</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg">${g}</svg>`;
+  }
 
   // ---- 리포트 ----
   const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -851,6 +907,13 @@
       if (q.none) { rbTbl += `<tr><td>${nm}</td><td colspan="7" style="color:#6b7383">가속 개시 전 유의 거동 없음</td><td>양호</td></tr>`; continue; }
       rbTbl += `<tr><td>${nm}</td><td>${q.tBr.toFixed(2)} s</td><td>${q.tOn.toFixed(2)} s</td><td>${(q.T*1000).toFixed(0)} ms</td><td>${(q.xPk*1000).toFixed(1)} mm</td><td>${(q.vPk*1000).toFixed(1)} mm/s</td><td>${q.aPk.toFixed(3)} m/s²</td><td>${rbDir(q)}</td><td>${q.valid ? '유의' : `잡음 이내 (±${(q.xNoise*1000).toFixed(1)} mm)`}</td></tr>`;
     }
+    let rbFig = '';
+    for (const it of list) {
+      const q = rollback(it.R);
+      if (!q || q.short || q.none || !q.trace) continue;
+      rbFig += `<h4 style="font-size:13px;margin:14px 0 2px;color:#42506b">${DIR[it.dir]} ${it.n}회 — 개방 구간 확대</h4>${svgRollback(q)}
+        <p class="note">변위 ${(q.xPk*1000).toFixed(1)} mm · 속도 ${(q.vPk*1000).toFixed(1)} mm/s · 구간 ${(q.T*1000).toFixed(0)} ms · ${rbDir(q)} · ${q.valid ? '유의' : `잡음 이내 (±${(q.xNoise*1000).toFixed(1)} mm)`}</p>`;
+    }
     rbTbl += '</table><p class="note">브레이크 개방 시점 = 정지 구간 잡음의 4σ를 처음 초과한 시점, 가속 개시 = 1 Hz 필터 가속도가 0.1 m/s²를 처음 초과한 시점. 두 시점 사이를 정지 구간 평균으로 바이어스 보정한 뒤 적분해 변위·속도를 산출. 부호 +는 상승 방향. 판정의 잡음 한계는 잔류 바이어스 항(0.5·SE·T²)과 백색잡음 적분 항(σ·√(T/fs)·T/√3)의 합으로 추정했으며, 이를 3배 이상 초과할 때만 유의로 표기.</p>';
     let body = '';
     for (const it of list) {
@@ -897,6 +960,8 @@
       <h2>2. 방향별 평균</h2>${rep}
       <h2>3. ISO 18738 산출값 (참고)</h2>${isoTbl}
       <h2>4. 안티롤백 분석 (참고)</h2>${rbTbl}
+      <p class="lg"><i style="background:#d99a1a"></i>가속도<i style="background:#1a9e6a"></i>변위(mm)<i style="background:#2b7fc4"></i>속도(mm/s, 1/10 스케일)</p>
+      ${rbFig}
       <h2>5. 회차별 상세</h2>
       <p class="lg"><i style="background:#d99a1a"></i>가속도<i style="background:#2b7fc4"></i>속도<i style="background:#d9534f"></i>저크</p>
       ${body}
