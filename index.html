@@ -114,6 +114,7 @@
   <div><b>샘플 수</b> <span id="n">0</span></div>
   <div id="horiz" style="grid-column:1/-1"></div>
   <div id="isoBox" style="grid-column:1/-1"></div>
+  <div id="rbBox" style="grid-column:1/-1"></div>
   <div id="peaks"></div>
 </div>
 
@@ -374,6 +375,10 @@
     const hz = horizStats(S);
     const iso = R.done ? isoCalc(R) : null;
     $('isoBox').innerHTML = iso ? `<b>ISO 18738 (참고)</b> 등속 ${iso.cvDur.toFixed(1)}s${iso.full?'(전체 대체)':''} · VPPV 수직 max ${iso.z.max.toFixed(3)} / A95 ${iso.z.a95.toFixed(3)} · 전후 ${iso.x.max.toFixed(3)}/${iso.x.a95.toFixed(3)} · 좌우 ${iso.y.max.toFixed(3)}/${iso.y.a95.toFixed(3)} m/s²<br>최대 가속 ${iso.aMax.toFixed(2)} · 감속 ${iso.dMax.toFixed(2)} m/s² · 최대 저크 ${iso.jMax.toFixed(2)} m/s³ · 최대 속도 ${iso.vMax.toFixed(2)} m/s` : '';
+    const rb = R.done ? rollback(R) : null;
+    $('rbBox').innerHTML = !rb ? '' : rb.short ? '<b>안티롤백</b> 출발 전 정지 구간이 짧아 분석 불가 (주행 전 0.5 s 이상 기록 필요)'
+      : rb.none ? `<b>안티롤백</b> 가속 개시 전 유의 거동 없음 (잡음 ${(rb.sd*1000).toFixed(1)} mm/s²)`
+      : `<b>안티롤백</b> 개방 ${rb.tBr.toFixed(2)}s → 가속 ${rb.tOn.toFixed(2)}s (${(rb.T*1000).toFixed(0)} ms) · 변위 ${(rb.xPk*1000).toFixed(1)} mm · 속도 ${(rb.vPk*1000).toFixed(1)} mm/s · ${rbDir(rb)}${rb.valid ? '' : ` · 잡음 한계 ±${(rb.xNoise*1000).toFixed(1)} mm 이내로 유의성 낮음`}`;
     $('horiz').innerHTML = hz ? `<b>수평 진동</b> 전후 p-p ${hz.xpp.toFixed(3)} · rms ${hz.xrms.toFixed(3)} / 좌우 p-p ${hz.ypp.toFixed(3)} · rms ${hz.yrms.toFixed(3)} m/s²` : '';
   }
   function updateSummary() {
@@ -727,6 +732,69 @@
       cvDur: S[seg[1]].t - S[seg[0]].t, full: !reg.cv };
   }
 
+
+  // ================= 안티롤백 분석 =================
+  // 브레이크 개방 직후 ~ 의도된 가속 개시 직전 구간의 미소 거동을 분리해 정량화
+  function rollback(R) {
+    const S = R.S; if (!S || S.length < 128) return null;
+    const dur = S[S.length-1].t - S[0].t; if (dur <= 0) return null;
+    const fs = (S.length - 1) / dur;
+    const aRaw = S.map(p => p.ar);
+    // 1 Hz 2극 버터워스(순·역방향)는 0.3 s 내외의 짧은 롤백 펄스를 크게 감쇠시키므로
+    // 의도된 가속 구간만 남는다. 다만 위상 무지연 필터라 시점이 앞으로 번지므로
+    // 정확한 시각은 30 ms 이동평균(중심) 신호로 되짚어 확정한다.
+    const a1 = filtfilt(aRaw, butter2(1, fs));
+    let iOnA1 = -1;
+    for (let i = 0; i < a1.length; i++) if (Math.abs(a1[i]) > 0.1) { iOnA1 = i; break; }
+    if (iOnA1 < 0) return null;
+    // 정지 기준 구간
+    const q1 = Math.min(iOnA1 - Math.round(0.2 * fs), Math.round(1.0 * fs));
+    if (q1 < Math.round(0.4 * fs)) return { short:true };
+    let b0 = 0; for (let i = 0; i < q1; i++) b0 += aRaw[i]; b0 /= q1;
+    let sd = 0; for (let i = 0; i < q1; i++) sd += (aRaw[i]-b0)*(aRaw[i]-b0);
+    sd = Math.sqrt(sd / q1);
+    // 30 ms 중심 이동평균
+    const w = Math.max(1, Math.round(0.015 * fs));
+    const sm = new Array(S.length);
+    for (let i = 0; i < S.length; i++) {
+      let acc = 0, n = 0;
+      for (let k = Math.max(0, i-w); k <= Math.min(S.length-1, i+w); k++) { acc += aRaw[k] - b0; n++; }
+      sm[i] = acc / n;
+    }
+    const smSd = sd / Math.sqrt(2*w + 1);
+    // 의도된 가속 개시: a1 판정점에서 뒤로 되짚어 조용해지는 지점
+    const thrOn = Math.max(0.05, 6 * smSd);
+    let iOn = iOnA1;
+    while (iOn > q1 && Math.abs(sm[iOn]) > thrOn) iOn--;
+    // 브레이크 개방(최초 유의 거동)
+    const thrBr = Math.max(4 * smSd, 0.01);
+    let iBr = -1;
+    for (let i = q1; i < iOn; i++) if (Math.abs(sm[i]) > thrBr) { iBr = i; break; }
+    if (iBr < 0) return { none:true, sd, tOn:S[iOn].t - S[0].t };
+    // 개방 ~ 가속개시 구간 적분 (정지 구간 평균으로 바이어스 보정)
+    let v = 0, x = 0, vPk = 0, xPk = 0, xSgn = 0;
+    for (let i = iBr + 1; i <= iOn; i++) {
+      const dt = S[i].t - S[i-1].t; if (dt <= 0 || dt > 0.2) continue;
+      v += ((aRaw[i] - b0) + (aRaw[i-1] - b0)) / 2 * dt;
+      x += v * dt;
+      if (Math.abs(v) > Math.abs(vPk)) vPk = v;
+      if (Math.abs(x) > Math.abs(xPk)) { xPk = x; xSgn = Math.sign(x); }
+    }
+    const T = S[iOn].t - S[iBr].t;
+    const travel = Math.sign(S[S.length-1].s || 0);
+    // 변위 오차 추정: 잔류 바이어스 항(정지구간 평균의 표준오차) + 백색잡음 적분 항
+    const seBias = sd / Math.sqrt(q1);
+    const xNoise = 0.5 * seBias * T * T + sd * Math.sqrt(T / fs) * T / Math.sqrt(3);
+    let aPk = 0;
+    for (let i = iBr; i <= iOn; i++) if (Math.abs(sm[i]) > Math.abs(aPk)) aPk = sm[i];
+    return {
+      tBr: S[iBr].t - S[0].t, tOn: S[iOn].t - S[0].t, T,
+      vPk, xPk, aPk, sd, xNoise, travel, dirSame: travel !== 0 && xSgn === travel,
+      valid: Math.abs(xPk) > 3 * xNoise
+    };
+  }
+  const rbDir = q => q.xPk === 0 ? '—' : (q.xPk > 0 ? '상승' : '하강') + (q.travel === 0 ? '' : q.dirSame ? ' (주행방향과 동일)' : ' (주행방향과 반대)');
+
   // ---- 리포트 ----
   const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   function svgChart(S, seg) {
@@ -774,6 +842,16 @@
       isoTbl += `<tr><td>${DIR[it.dir]} ${it.n}회</td><td>${g(q.z.max,q.z.a95)}</td><td>${g(q.x.max,q.x.a95)}</td><td>${g(q.y.max,q.y.a95)}</td><td>${q.aMax.toFixed(2)}</td><td>${q.dMax.toFixed(2)}</td><td>${q.jMax.toFixed(2)}</td><td>${q.vMax.toFixed(2)}</td><td>${q.cvDur.toFixed(1)} s${q.full?'*':''}</td></tr>`;
     }
     isoTbl += '</table><p class="note">VPPV = 영교차점 사이 peak-to-peak 진동값(m/s²), 등속 구간 기준. A95 = 전체 VPPV의 95 백분위. 최대 가속·감속은 1 Hz 2극 버터워스, 속도는 10 Hz 저역통과 신호 적분. * 는 등속 구간을 분리하지 못해 전 구간으로 대체.</p>';
+    let rbTbl = '<table><tr><th>회차</th><th>개방 시점</th><th>가속 개시</th><th>롤백 구간</th><th>최대 변위</th><th>최대 속도</th><th>가속도 피크</th><th>방향</th><th>판정</th></tr>';
+    for (const it of list) {
+      const q = rollback(it.R);
+      const nm = `${DIR[it.dir]} ${it.n}회`;
+      if (!q) { rbTbl += `<tr><td>${nm}</td><td colspan="8" style="color:#6b7383">산출 불가</td></tr>`; continue; }
+      if (q.short) { rbTbl += `<tr><td>${nm}</td><td colspan="8" style="color:#6b7383">출발 전 정지 구간 부족</td></tr>`; continue; }
+      if (q.none) { rbTbl += `<tr><td>${nm}</td><td colspan="7" style="color:#6b7383">가속 개시 전 유의 거동 없음</td><td>양호</td></tr>`; continue; }
+      rbTbl += `<tr><td>${nm}</td><td>${q.tBr.toFixed(2)} s</td><td>${q.tOn.toFixed(2)} s</td><td>${(q.T*1000).toFixed(0)} ms</td><td>${(q.xPk*1000).toFixed(1)} mm</td><td>${(q.vPk*1000).toFixed(1)} mm/s</td><td>${q.aPk.toFixed(3)} m/s²</td><td>${rbDir(q)}</td><td>${q.valid ? '유의' : `잡음 이내 (±${(q.xNoise*1000).toFixed(1)} mm)`}</td></tr>`;
+    }
+    rbTbl += '</table><p class="note">브레이크 개방 시점 = 정지 구간 잡음의 4σ를 처음 초과한 시점, 가속 개시 = 1 Hz 필터 가속도가 0.1 m/s²를 처음 초과한 시점. 두 시점 사이를 정지 구간 평균으로 바이어스 보정한 뒤 적분해 변위·속도를 산출. 부호 +는 상승 방향. 판정의 잡음 한계는 잔류 바이어스 항(0.5·SE·T²)과 백색잡음 적분 항(σ·√(T/fs)·T/√3)의 합으로 추정했으며, 이를 3배 이상 초과할 때만 유의로 표기.</p>';
     let body = '';
     for (const it of list) {
       const S = it.R.S, o = stats(S), p = S[S.length-1], seg = segments(S);
@@ -818,7 +896,8 @@
       <h2>1. 전 회차 측정값</h2>${sum}
       <h2>2. 방향별 평균</h2>${rep}
       <h2>3. ISO 18738 산출값 (참고)</h2>${isoTbl}
-      <h2>4. 회차별 상세</h2>
+      <h2>4. 안티롤백 분석 (참고)</h2>${rbTbl}
+      <h2>5. 회차별 상세</h2>
       <p class="lg"><i style="background:#d99a1a"></i>가속도<i style="background:#2b7fc4"></i>속도<i style="background:#d9534f"></i>저크</p>
       ${body}
       <p class="note" style="margin-top:22px">측정: 스마트폰 3축 가속도계, 정지 시 중력벡터에 투영한 연직 성분. 수평 2축은 보정 시 정한 수평면 직교 기저에 투영(전후 = 기기 세로축의 수평 성분, 좌우 = 그 직교축). 가속도·수평 ${$('fc').value} Hz / 저크 ${$('jfc').value} Hz 2단 저역통과. 속도·거리는 사다리꼴 적분 후 종료 시 v=0 조건으로 선형 드리프트 보정. FFT는 필터 전 원시 가속도에 Hann 윈도우 적용.
