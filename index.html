@@ -60,13 +60,15 @@
   td:first-child,th:first-child{text-align:left}
   .btns{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:auto}
   #msg{order:0}
-  button.mic{grid-column:1/-1;background:var(--panel);color:var(--dim);border:1px solid var(--line);font-size:13px;padding:10px}
   button.mic.on{background:var(--ok);color:var(--bg);border-color:var(--ok)}
+  button.mic{white-space:pre-line}
   .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
   details .row button{border-radius:8px}
   .meta input{background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:8px;font-size:13px;font-family:inherit;min-width:0}
   button{border:0;border-radius:12px;padding:16px;font-size:16px;font-weight:600;color:var(--bg);background:var(--ink);font-family:inherit}
-  button.main{width:100%;background:var(--acc);padding:15px}
+  .gorow{display:flex;gap:8px;align-items:stretch}
+  button.main{flex:1;background:var(--acc);padding:15px}
+  button.mic{flex:0 0 auto;width:112px;background:var(--panel);color:var(--dim);border:1px solid var(--line);font-size:12px;font-weight:500;padding:10px 6px;line-height:1.25}
   button.main.stop{background:var(--jrk)}
   button.sub{background:var(--panel);color:var(--ink);border:1px solid var(--line);font-weight:500;font-size:14px;padding:12px}
   button:disabled{opacity:.4}
@@ -86,11 +88,21 @@
   <button class="tab" data-dir="down">하강</button>
 </div>
 <div class="trials" id="trials"></div>
-<button class="main" id="go">시작</button>
+<div class="gorow">
+  <button class="main" id="go">시작</button>
+  <button class="mic" id="mic">🎤 음성 꺼짐</button>
+</div>
 <div id="msg"></div>
 <div class="row" style="gap:6px">
   <label for="axis">표시 축</label>
   <select id="axis" style="flex:1"><option value="v" selected>수직 (가속도·속도·저크)</option><option value="x">수평 전후 (진동)</option><option value="y">수평 좌우 (진동)</option></select>
+  <label style="white-space:nowrap"><input type="checkbox" id="autodir" checked> 방향 자동</label>
+</div>
+<div class="row" style="gap:6px">
+  <label style="white-space:nowrap"><input type="checkbox" id="noise"> 소음 측정</label>
+  <label for="ncal">보정</label>
+  <input id="ncal" type="number" step="0.1" value="0" style="width:72px;background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px;font-size:13px">
+  <span style="font-size:11px;color:var(--dim)">dB 오프셋 (0 = 미보정, dBFS 표기)</span>
 </div>
 
 <div class="readouts">
@@ -115,6 +127,8 @@
   <div id="horiz" style="grid-column:1/-1"></div>
   <div id="isoBox" style="grid-column:1/-1"></div>
   <div id="rbBox" style="grid-column:1/-1"></div>
+  <div id="qBox" style="grid-column:1/-1"></div>
+  <div id="nzBox" style="grid-column:1/-1"></div>
   <div id="peaks"></div>
 </div>
 
@@ -135,6 +149,16 @@
 </div>
 
 <details><summary>시험 결과 요약 (전 회차)</summary><table id="sum"></table></details>
+<details><summary>설비 제원 (주파수 원인 추정용)</summary>
+  <div class="meta">
+    <input id="p-dia" type="number" step="1" placeholder="시브 직경 mm (예: 400)">
+    <select id="p-rope"><option value="1">로핑 1:1</option><option value="2" selected>로핑 2:1</option><option value="4">로핑 4:1</option></select>
+    <input id="p-gear" type="number" step="0.01" placeholder="감속비 (기어리스 = 1)">
+    <input id="p-pole" type="number" step="2" placeholder="모터 극수 (예: 20)">
+    <input id="p-rail" type="number" step="0.1" placeholder="레일 1본 길이 m (기본 5)">
+    <input id="p-brk" type="number" step="0.1" placeholder="브래킷 피치 m (기본 2.5)">
+  </div>
+</details>
 <details><summary>리포트 정보</summary>
   <div class="meta">
     <input id="m-site" placeholder="현장명"><input id="m-unit" placeholder="호기 / 기종">
@@ -152,7 +176,6 @@
   <button class="sub" id="load">CSV 불러오기</button>
   <button class="sub" id="reset" disabled>초기화</button>
   <button class="sub" id="report">리포트</button>
-  <button class="mic" id="mic">🎤 음성 명령 꺼짐</button>
   <input type="file" id="file" accept=".csv,text/csv" hidden>
 </div>
 
@@ -179,7 +202,7 @@
     try {
       const o = { nTrials, runs:{} };
       for (const k in runs) if (runs[k].S.length && runs[k].state === 'done')
-        o.runs[k] = { S:runs[k].S.map(p => [p.t,p.ar,p.a,p.v,p.j,p.s,p.xr||0,p.yr||0,p.x||0,p.y||0,p.jx||0,p.jy||0].map(x => +x.toFixed(4))), fsEst:runs[k].fsEst, bias:runs[k].bias, src:runs[k].src };
+        o.runs[k] = { S:runs[k].S.map(p => [p.t,p.ar,p.a,p.v,p.j,p.s,p.xr||0,p.yr||0,p.x||0,p.y||0,p.jx||0,p.jy||0].map(x => +x.toFixed(4))), fsEst:runs[k].fsEst, bias:runs[k].bias, src:runs[k].src, nz:runs[k].nz ? runs[k].nz.map(p => [+p.t.toFixed(2), +p.a.toFixed(1), +p.z.toFixed(1)]) : null };
       localStorage.setItem('erm2', JSON.stringify(o));
     } catch(_) {}
   }
@@ -187,7 +210,9 @@
     try {
       const o = JSON.parse(localStorage.getItem('erm2') || 'null'); if (!o) return;
       nTrials = o.nTrials || 3;
-      for (const k in o.runs) { const r = newRun(); r.S = o.runs[k].S.map(x => ({t:x[0],ar:x[1],a:x[2],v:x[3],j:x[4],s:x[5],xr:x[6]||0,yr:x[7]||0,x:x[8]||0,y:x[9]||0,jx:x[10]||0,jy:x[11]||0})); r.fsEst = o.runs[k].fsEst; r.bias = o.runs[k].bias; r.src = o.runs[k].src; r.state = 'done'; runs[k] = r; }
+      for (const k in o.runs) { const r = newRun(); r.S = o.runs[k].S.map(x => ({t:x[0],ar:x[1],a:x[2],v:x[3],j:x[4],s:x[5],xr:x[6]||0,yr:x[7]||0,x:x[8]||0,y:x[9]||0,jx:x[10]||0,jy:x[11]||0})); r.fsEst = o.runs[k].fsEst; r.bias = o.runs[k].bias; r.src = o.runs[k].src; r.state = 'done';
+      if (o.runs[k].nz) r.nz = o.runs[k].nz.map(x => ({t:x[0], a:x[1], z:x[2]}));
+      runs[k] = r; }
     } catch(_) {}
   }
 
@@ -263,6 +288,7 @@
         R.state = 'rec'; refreshUI(); setPhase();
         msg(`[${label(cur)}] 영점 완료 · ${srcName} ${R.fsEst.toFixed(0)} Hz (|g| = ${gmag.toFixed(3)}). 기록 중 — 주행 후 정지.`, 'ok');
         raf = requestAnimationFrame(draw);
+        if (R.nz) { const tz = performance.now()/1000; nzTimer = setInterval(() => nzSample(R, performance.now()/1000 - tz), 50); }
       }
       return;
     }
@@ -317,8 +343,28 @@
       p.v = vv; p.s = ss;
     }
     R.bias = bias; R.state = 'done'; R.src = null;
+
+    // 방향 자동 판정: 순 변위 부호(+ = 상승). 드리프트 보정 후 값이라 m 단위에서 부호는 안정적.
+    let moved = '';
+    const net = S[S.length-1].s;
+    if ($('autodir').checked && Math.abs(net) > 0.1) {
+      const det = net > 0 ? 'up' : 'down';
+      if (det !== key.replace(/\d+$/, '')) {
+        const n0 = +key.match(/\d+$/)[0];
+        let slot = 0;
+        if (!runs[det+n0] || !runs[det+n0].S.length) slot = n0;
+        else for (let n = 1; n <= nTrials; n++) if (!runs[det+n] || !runs[det+n].S.length) { slot = n; break; }
+        if (slot) {
+          runs[det+slot] = R; delete runs[key];
+          cur = { dir:det, n:slot };
+          moved = ` — 순 변위 ${net.toFixed(2)} m로 ${DIR[det]} 판정, ${DIR[det]} ${slot}회로 이동`;
+        } else {
+          moved = ` — ${DIR[det]}으로 판정되나 빈 회차가 없어 그대로 둡니다`;
+        }
+      }
+    }
     save(); refreshUI();
-    msg(`[${label(cur)}] ${auto ? '정지 감지 → 자동 종료' : '기록 종료'}. 종료 시 정지 조건으로 드리프트 보정했습니다.`, 'ok');
+    msg(`[${label(cur)}] ${auto ? '정지 감지 → 자동 종료' : '기록 종료'}. 종료 시 정지 조건으로 드리프트 보정했습니다.${moved}`, 'ok');
     if (auto && navigator.vibrate) navigator.vibrate([80,60,80]);
   }
 
@@ -375,6 +421,13 @@
     const hz = horizStats(S);
     const iso = R.done ? isoCalc(R) : null;
     $('isoBox').innerHTML = iso ? `<b>ISO 18738 (참고)</b> 등속 ${iso.cvDur.toFixed(1)}s${iso.full?'(전체 대체)':''} · VPPV 수직 max ${iso.z.max.toFixed(3)} / A95 ${iso.z.a95.toFixed(3)} · 전후 ${iso.x.max.toFixed(3)}/${iso.x.a95.toFixed(3)} · 좌우 ${iso.y.max.toFixed(3)}/${iso.y.a95.toFixed(3)} m/s²<br>최대 가속 ${iso.aMax.toFixed(2)} · 감속 ${iso.dMax.toFixed(2)} m/s² · 최대 저크 ${iso.jMax.toFixed(2)} m/s³ · 최대 속도 ${iso.vMax.toFixed(2)} m/s` : '';
+    const nq = R.done ? noiseCv(R) : null;
+    $('nzBox').innerHTML = (!nq || !nq.cv) ? (R.nz ? '<b>소음</b> 데이터 부족' : '')
+      : `<b>소음</b> 등속${nq.cvSeg?'':'(전체 대체)'} Leq ${nq.cv.leq.toFixed(1)} · Lmax ${nq.cv.lmax.toFixed(1)} · L95 ${nq.cv.l95.toFixed(1)} ${nq.cv.unit}`;
+    const qa = R.done ? quality(R) : null;
+    $('qBox').innerHTML = !qa ? '' : qa.verdict === 'ok'
+      ? '<b>유효성</b> 정상'
+      : `<b>유효성</b> <span style="color:${qa.verdict==='reject'?'var(--jrk)':'var(--acc)'}">${VJ[qa.verdict]}</span> — ${qa.issues.map(i => i.msg).join(' · ')}`;
     const rb = R.done ? rollback(R) : null;
     $('rbBox').innerHTML = !rb ? '' : rb.short ? '<b>안티롤백</b> 출발 전 정지 구간이 짧아 분석 불가 (주행 전 0.5 s 이상 기록 필요)'
       : rb.none ? `<b>안티롤백</b> 가속 개시 전 유의 거동 없음 (잡음 ${(rb.sd*1000).toFixed(1)} mm/s²)`
@@ -606,7 +659,7 @@
 
   // ---- 위치 ----
   let geo = null;  // {lat, lon, acc, ts, addr}
-  const MKEYS = ['m-site','m-unit','m-spec','m-by','m-addr'];
+  const MKEYS = ['m-site','m-unit','m-spec','m-by','m-addr','p-dia','p-rope','p-gear','p-pole','p-rail','p-brk'];
   function saveMeta() {
     try { localStorage.setItem('erm2meta', JSON.stringify({ v:MKEYS.map(k => $(k).value), geo })); } catch(_) {}
   }
@@ -809,6 +862,55 @@
   const rbDir = q => q.xPk === 0 ? '—' : (q.xPk > 0 ? '상승' : '하강') + (q.travel === 0 ? '' : q.dirSame ? ' (주행방향과 동일)' : ' (주행방향과 반대)');
 
 
+
+  // 3축 진동 파형 (ISO 18738 축 표기: z 수직, x 전후, y 좌우)
+  // 운동 성분(1 Hz 이하)을 제거한 진동 신호를 축별 패널로 나눠 그린다
+  function svgVib3(R) {
+    const S = R.S; if (!S || S.length < 64) return '';
+    const dur = S[S.length-1].t - S[0].t; if (dur <= 0) return '';
+    const fs = (S.length - 1) / dur;
+    const cut = butter2(1, fs);
+    const AX = [['ar','z (수직)','#d99a1a'], ['xr','x (전후)','#2b7fc4'], ['yr','y (좌우)','#1a9e6a']];
+    const hp = {};
+    let gm = 0.02;
+    for (const [k] of AX) {
+      const raw = S.map(p => p[k] || 0);
+      const lo = filtfilt(raw, cut);
+      hp[k] = raw.map((v, i) => v - lo[i]);
+      for (const v of hp[k]) gm = Math.max(gm, Math.abs(v));
+    }
+    const seg = segments(S);
+    const iso = isoCalc(R);
+    const W = 760, L = 52, Rp = 10, PH = 92, GAP = 8, TOP = 8, B = 24;
+    const H = TOP + 3 * PH + 2 * GAP + B, w = W - L - Rp;
+    const X = t => L + t / dur * w;
+    const stepN = Math.max(1, Math.ceil(S.length / 900));
+    let g = '';
+    AX.forEach(([k, nm, col], p) => {
+      const y0 = TOP + p * (PH + GAP), mid = y0 + PH / 2;
+      g += `<rect x="${L}" y="${y0}" width="${w}" height="${PH}" fill="#fbfcfe" stroke="#e3e7ee"/>`;
+      if (seg) {
+        const xa = X(S[seg.const[0]].t), xb = X(S[seg.const[1]].t);
+        g += `<rect x="${xa}" y="${y0}" width="${xb-xa}" height="${PH}" fill="#eef4fb"/>`;
+      }
+      g += `<line x1="${L}" y1="${mid}" x2="${L+w}" y2="${mid}" stroke="#c8ceda"/>`;
+      let pts = '';
+      for (let i = 0; i < S.length; i += stepN)
+        pts += `${X(S[i].t).toFixed(1)},${(mid - hp[k][i] / (gm*1.1) * (PH/2)).toFixed(1)} `;
+      g += `<polyline fill="none" stroke="${col}" stroke-width="1" points="${pts}"/>`;
+      g += `<text x="6" y="${mid - 3}" font-size="11" fill="${col}" font-weight="600">${nm}</text>`;
+      const vp = iso ? (k === 'ar' ? iso.z : k === 'xr' ? iso.x : iso.y) : null;
+      if (vp) g += `<text x="${L+w-4}" y="${y0+13}" font-size="10" fill="#6b7383" text-anchor="end">VPPV max ${vp.max.toFixed(3)} · A95 ${vp.a95.toFixed(3)} m/s²</text>`;
+      g += `<text x="6" y="${mid + 11}" font-size="9" fill="#9aa4b5">±${(gm*1.1).toFixed(2)}</text>`;
+    });
+    const gstep = dur > 30 ? 10 : dur > 12 ? 5 : 2;
+    for (let t = 0; t <= dur; t += gstep)
+      g += `<line x1="${X(t)}" y1="${TOP}" x2="${X(t)}" y2="${H-B}" stroke="#eceff4"/><text x="${X(t)}" y="${H-8}" font-size="10" fill="#6b7383" text-anchor="middle">${t.toFixed(0)}</text>`;
+    g += `<text x="${L}" y="${H-8}" font-size="10" fill="#6b7383">s</text>`;
+    g += `<text x="${W-4}" y="${H-8}" font-size="10" fill="#6b7383" text-anchor="end">음영 = 등속 구간 · 공통 스케일 ±${(gm*1.1).toFixed(2)} m/s² · 1 Hz 이상 성분</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg">${g}</svg>`;
+  }
+
   function svgRollback(q) {
     const tr = q.trace; if (!tr || tr.t.length < 4) return '';
     const W = 760, H = 210, L = 46, Rp = 46, T = 14, B = 26;
@@ -851,9 +953,274 @@
     return `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg">${g}</svg>`;
   }
 
+
+
+  // ================= 소음 측정 =================
+  // 폰 마이크는 절대 음압 교정이 되어 있지 않다. 여기서는 dBFS(A)를 산출하고,
+  // 사용자가 소음계와 비교해 입력한 오프셋을 더해 dB(A) 근사값으로 표기한다.
+  let audioCtx = null, micStream = null, srcNode = null, anaNode = null, nzTimer = 0;
+  const NFFT = 2048;
+  let nzBuf = null, nzWin = null, nzAw = null;
+
+  function aWeight(f) { // IEC 61672 A 특성 (해석식)
+    const f2 = f*f;
+    const num = 12194*12194 * f2*f2;
+    const den = (f2 + 20.6*20.6) * Math.sqrt((f2 + 107.7*107.7) * (f2 + 737.9*737.9)) * (f2 + 12194*12194);
+    return 20 * Math.log10(num / den) + 2.0;
+  }
+
+  async function nzStart(R) {
+    if (!$('noise').checked) return false;
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: {
+        echoCancellation:false, noiseSuppression:false, autoGainControl:false
+      }});
+    } catch (e) { msg('마이크 권한이 없어 소음 측정을 건너뜁니다.', 'err'); return false; }
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    srcNode = audioCtx.createMediaStreamSource(micStream);
+    anaNode = audioCtx.createAnalyser();
+    anaNode.fftSize = NFFT;
+    srcNode.connect(anaNode);
+    const fs = audioCtx.sampleRate;
+    nzBuf = new Float32Array(NFFT);
+    nzWin = new Float32Array(NFFT);
+    for (let i = 0; i < NFFT; i++) nzWin[i] = 0.5 - 0.5 * Math.cos(2*Math.PI*i/(NFFT-1));
+    nzAw = new Float32Array(NFFT/2);
+    for (let k = 1; k < NFFT/2; k++) nzAw[k] = Math.pow(10, aWeight(k * fs / NFFT) / 10);
+    R.nz = []; R.nzFs = fs;
+    return true;
+  }
+  function nzSample(R, t) {
+    if (!anaNode) return;
+    anaNode.getFloatTimeDomainData(nzBuf);
+    const re = new Float64Array(NFFT), im = new Float64Array(NFFT);
+    for (let i = 0; i < NFFT; i++) re[i] = nzBuf[i] * nzWin[i];
+    fft(re, im);
+    let pA = 0, pZ = 0;
+    for (let k = 1; k < NFFT/2; k++) {
+      const amp = 2 * Math.hypot(re[k], im[k]) / (NFFT * 0.5);
+      const pw = amp * amp / 2;
+      pZ += pw; pA += pw * nzAw[k];
+    }
+    const dbfs = v => 10 * Math.log10(Math.max(v, 1e-14) / 0.5);
+    R.nz.push({ t, a: dbfs(pA), z: dbfs(pZ) });
+  }
+  function nzStop() {
+    if (nzTimer) { clearInterval(nzTimer); nzTimer = 0; }
+    try { srcNode && srcNode.disconnect(); } catch(_) {}
+    try { micStream && micStream.getTracks().forEach(tr => tr.stop()); } catch(_) {}
+    try { audioCtx && audioCtx.close(); } catch(_) {}
+    audioCtx = null; micStream = null; srcNode = null; anaNode = null;
+  }
+
+  // 구간별 소음 지표. Leq = 에너지 평균, Lmax = 125 ms(Fast) 평균의 최대, L95 = 하위 5 백분위
+  function noiseStats(R, t0, t1) {
+    if (!R.nz || R.nz.length < 4) return null;
+    const off = +($('ncal').value || 0);
+    const sel = R.nz.filter(p => p.t >= t0 && p.t <= t1);
+    if (sel.length < 4) return null;
+    let sum = 0; for (const p of sel) sum += Math.pow(10, p.a/10);
+    const leq = 10 * Math.log10(sum / sel.length) + off;
+    // Fast(125 ms) 평균
+    const win = Math.max(1, Math.round(0.125 / Math.max(0.02, (sel[sel.length-1].t - sel[0].t) / (sel.length-1))));
+    let lmax = -200;
+    for (let i = 0; i + win <= sel.length; i++) {
+      let e = 0; for (let k = i; k < i + win; k++) e += Math.pow(10, sel[k].a/10);
+      lmax = Math.max(lmax, 10 * Math.log10(e / win));
+    }
+    lmax += off;
+    const srt = sel.map(p => p.a).sort((a,b) => a-b);
+    const l95 = srt[Math.floor(0.05 * (srt.length-1))] + off;
+    const l10 = srt[Math.floor(0.90 * (srt.length-1))] + off;
+    return { leq, lmax, l95, l10, n: sel.length, off, unit: off === 0 ? 'dBFS(A)' : 'dB(A)' };
+  }
+  function noiseCv(R) {
+    const S = R.S; if (!S || !R.nz) return null;
+    const seg = segments(S);
+    const t0 = seg ? S[seg.const[0]].t : S[0].t, t1 = seg ? S[seg.const[1]].t : S[S.length-1].t;
+    const cv = noiseStats(R, t0, t1);
+    return { cv, all: noiseStats(R, S[0].t, S[S.length-1].t), cvSeg: !!seg };
+  }
+
+
+  // ================= 진동 이벤트 검출 (위치 표시용) =================
+  // 등속 구간에서 1 Hz 이상 성분이 임계값을 넘는 지점을 찾아 주행 위치(m)와 함께 반환
+  function vibEvents(R) {
+    const S = R.S; if (!S || S.length < 128) return null;
+    const dur = S[S.length-1].t - S[0].t; if (dur <= 0) return null;
+    const fs = (S.length - 1) / dur;
+    const seg = segments(S);
+    const i0 = seg ? seg.const[0] : 0, i1 = seg ? seg.const[1] : S.length - 1;
+    if (i1 - i0 < 64) return null;
+    const cut = butter2(1, fs);
+    const axes = [['ar','수직'], ['xr','전후'], ['yr','좌우']];
+    const hp = {}, sg = {};
+    for (const [k] of axes) {
+      // 전 구간에 대해 고역통과 → 검출 창 경계에서 필터 과도응답이 생기지 않게 한다
+      const raw = S.map(p => p[k] || 0);
+      const lo = filtfilt(raw, cut);
+      hp[k] = raw.map((v, i) => v - lo[i]);
+      // 임계값은 MAD 기반 robust σ — 충격 자체가 임계값을 밀어올리지 않는다
+      const win = hp[k].slice(i0, i1 + 1).map(Math.abs).sort((a,b) => a-b);
+      const mad = win[Math.floor(win.length/2)];
+      sg[k] = 1.4826 * mad;
+    }
+    const thr = {}; for (const [k] of axes) thr[k] = Math.max(6 * sg[k], 0.08);
+    const guard = Math.max(2, Math.round(0.3 * fs));
+    const ev = [];
+    let i = i0;
+    while (i <= i1) {
+      let hit = null;
+      for (const [k, nm] of axes) if (Math.abs(hp[k][i]) > thr[k]) { hit = true; break; }
+      if (!hit) { i++; continue; }
+      let bi = i, bv = 0, bk = null;
+      for (let j = i; j <= Math.min(i1, i + guard); j++)
+        for (const [k, nm] of axes) {
+          const v = Math.abs(hp[k][j]);
+          if (v > bv) { bv = v; bi = j; bk = { k, nm }; }
+        }
+      ev.push({ t: S[bi].t, s: S[bi].s, amp: bv, axis: bk.nm, ratio: bv / thr[bk.k] });
+      i = bi + guard;
+    }
+    let spacing = null;
+    if (ev.length >= 2) {
+      const d = []; for (let n = 1; n < ev.length; n++) d.push(Math.abs(ev[n].s - ev[n-1].s));
+      const srt = d.slice().sort((a,b) => a-b);
+      const med = srt[Math.floor(srt.length/2)];
+      let sum = 0; for (const x of d) sum += x;
+      spacing = { med, mean: sum / d.length, n: d.length };
+    }
+    return { ev, rms: sg, thr, spacing, cvSeg: !!seg, t0: S[i0].t, t1: S[i1].t };
+  }
+
+
+  // ================= 주파수 원인 추정 =================
+  // 회전 기인: 로프 이동거리에 대해 주기적 → λ_car = π·D / (로핑 × 차수)
+  // 공간 기인(레일·브래킷): 카 이동거리에 대해 주기적 → λ_car = 피치
+  function machSpec() {
+    const num = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) && v > 0 ? v : d; };
+    return {
+      dia: num('p-dia', 0) / 1000,            // m
+      rope: +$('p-rope').value || 2,
+      gear: num('p-gear', 1),
+      pole: num('p-pole', 0),
+      rail: num('p-rail', 5),
+      brk: num('p-brk', 2.5)
+    };
+  }
+  function cruiseSpeed(R) {
+    const S = R.S, seg = segments(S);
+    const i0 = seg ? seg.const[0] : 0, i1 = seg ? seg.const[1] : S.length - 1;
+    let sum = 0, n = 0;
+    for (let i = i0; i <= i1; i++) { sum += Math.abs(S[i].v); n++; }
+    return n ? sum / n : 0;
+  }
+  function freqSources(R) {
+    const sp = spectrum(R, 'const', $('fax').value);
+    if (!sp || !sp.peaks.length) return null;
+    const v = cruiseSpeed(R); if (v < 0.05) return null;
+    const m = machSpec();
+    const cand = [];
+    if (m.dia > 0) {
+      const lamRev = Math.PI * m.dia / m.rope;      // 시브 1회전당 카 이동거리
+      for (let n = 1; n <= 4; n++) cand.push({ lam: lamRev / n, label: `시브 ${n}차 (불평형·편심)`, kind:'rot' });
+      if (m.pole > 0) {
+        const lamE = lamRev / (m.pole / 2 * m.gear); // 전기 1주기당 카 이동거리
+        cand.push({ lam: lamE, label:'모터 전기 1차 (코깅·역기전력 왜곡)', kind:'rot' });
+        cand.push({ lam: lamE / 6, label:'모터 6f_e (토크 리플)', kind:'rot' });
+        cand.push({ lam: lamE / 12, label:'모터 12f_e (토크 리플)', kind:'rot' });
+        cand.push({ lam: lamRev / (m.pole * m.gear), label:'슬롯·극 상호작용', kind:'rot' });
+      }
+      if (m.gear > 1.01) cand.push({ lam: lamRev / m.gear, label:'감속기 입력축 1차', kind:'rot' });
+    }
+    cand.push({ lam: m.rail, label:'레일 이음부', kind:'rail' });
+    cand.push({ lam: m.rail / 2, label:'레일 이음부 2차 고조', kind:'rail' });
+    cand.push({ lam: m.brk, label:'레일 브래킷 피치', kind:'rail' });
+
+    const ve = vibEvents(R);
+    const evLam = ve && ve.spacing ? ve.spacing.med : null;
+    // 잡음 수준 피크는 제외 (최대 피크의 10 % 또는 0.01 m/s² 미만)
+    const pmax = Math.max(...sp.peaks.map(x => x.a));
+    const useful = sp.peaks.filter(x => x.a >= Math.max(0.01, 0.1 * pmax));
+    const rows = (useful.length ? useful : sp.peaks.slice(0,1)).map(pk => {
+      const lam = v / pk.f;
+      let best = null;
+      for (const c of cand) {
+        const dev = Math.abs(lam - c.lam) / c.lam;
+        if (!best || dev < best.dev) best = { ...c, dev };
+      }
+      const tol = Math.max(0.08, 1.5 * sp.df / pk.f);
+      const hit = best && best.dev <= tol;
+      // λ가 겹치는 다른 후보가 있으면 구분 불가로 표기
+      let ambig = null;
+      if (best) for (const c of cand)
+        if (c.label !== best.label && Math.abs(c.lam - best.lam) / best.lam < 0.02) ambig = c.label;
+      const evMatch = evLam && Math.abs(lam - evLam) / evLam < 0.12;
+      return { f: pk.f, amp: pk.a, lam, best, hit, tol, evMatch, ambig };
+    });
+    return { rows, v, df: sp.df, fs: sp.fs, axis: sp.axis, seg: sp.seg, evLam, spec: m };
+  }
+
+  // ================= 측정 유효성 자동 판정 =================
+  // 반환: { verdict:'ok'|'warn'|'reject', issues:[{lv,msg}] }
+  function quality(R) {
+    const S = R.S; if (!S || S.length < 32) return { verdict:'reject', issues:[{lv:'reject', msg:'샘플 수 부족'}] };
+    const dur = S[S.length-1].t - S[0].t; if (dur <= 0) return { verdict:'reject', issues:[{lv:'reject', msg:'시간축 이상'}] };
+    const fs = (S.length - 1) / dur;
+    const iss = [];
+
+    // 1) 폰 자세 변화 — 기울면 중력이 수평축으로 새어나와 DC 성분이 생긴다 (1° ≈ 0.17 m/s²)
+    let mx = 0, my = 0;
+    for (const p of S) { mx += p.x || 0; my += p.y || 0; }
+    mx /= S.length; my /= S.length;
+    const tilt = Math.hypot(mx, my);
+    if (tilt > 0.15) iss.push({ lv:'reject', msg:`측정 중 폰 자세 변화 추정 (수평축 DC ${tilt.toFixed(2)} m/s² ≈ ${(Math.asin(Math.min(1,tilt/9.81))*180/Math.PI).toFixed(1)}° 기울기)` });
+    else if (tilt > 0.08) iss.push({ lv:'warn', msg:`수평축 DC ${tilt.toFixed(2)} m/s² — 고정이 느슨했을 수 있음` });
+
+    // 2) 드리프트 보정량 — 클수록 적분 신뢰도 저하
+    const b = Math.abs(R.bias || 0);
+    if (b > 0.05) iss.push({ lv:'reject', msg:`드리프트 보정량 과다 (${(b*1000).toFixed(0)} mm/s²)` });
+    else if (b > 0.02) iss.push({ lv:'warn', msg:`드리프트 보정량 ${(b*1000).toFixed(0)} mm/s²` });
+
+    // 3) 주행 자체가 없음
+    const net = Math.abs(S[S.length-1].s);
+    let vm = 0; for (const p of S) vm = Math.max(vm, Math.abs(p.v));
+    if (net < 0.1 || vm < 0.05) iss.push({ lv:'reject', msg:`주행이 검출되지 않음 (변위 ${net.toFixed(2)} m, 최대속도 ${vm.toFixed(2)} m/s)` });
+
+    // 4) 종료 시 정지 미확인 — v=0 보정 전제가 깨진다
+    const nEnd = Math.max(4, Math.round(0.5 * fs));
+    let ae = 0; for (let i = S.length - nEnd; i < S.length; i++) ae += Math.abs(S[i].a);
+    ae /= nEnd;
+    if (ae > 0.1) iss.push({ lv:'reject', msg:`종료 시점에 아직 주행 중 (마지막 0.5 s 평균 |a| ${ae.toFixed(2)} m/s²)` });
+
+    // 4b) 감속 구간 미검출 — 주행 중에 기록을 끊으면 마지막 감속이 없다
+    if (!segments(S)) iss.push({ lv:'reject', msg:'가속·등속·감속 구간을 분리하지 못함 (주행 중 기록을 끊었을 가능성)' });
+
+    // 5) 시작 시 정지 미확인 — 영점 오염
+    const nSt = Math.max(4, Math.round(0.3 * fs));
+    let m0 = 0; for (let i = 0; i < nSt; i++) m0 += S[i].a; m0 /= nSt;
+    let sd0 = 0; for (let i = 0; i < nSt; i++) sd0 += (S[i].a - m0) * (S[i].a - m0);
+    sd0 = Math.sqrt(sd0 / nSt);
+    if (Math.abs(m0) > 0.1 || sd0 > 0.1) iss.push({ lv:'warn', msg:`출발 전 정지 상태 불확실 (초기 0.3 s |a| ${Math.abs(m0).toFixed(2)}, σ ${sd0.toFixed(2)} m/s²)` });
+
+    // 6) 샘플 누락
+    let gaps = 0, dts = [];
+    for (let i = 1; i < S.length; i++) { const dt = S[i].t - S[i-1].t; dts.push(dt); if (dt > 0.2) gaps++; }
+    dts.sort((a,b2) => a-b2);
+    const med = dts[Math.floor(dts.length/2)];
+    let odd = 0; for (const d of dts) if (d > 2*med || d < 0.5*med) odd++;
+    if (gaps > 0) iss.push({ lv:'reject', msg:`데이터 공백 ${gaps}건 (0.2 s 초과)` });
+    else if (odd / dts.length > 0.05) iss.push({ lv:'warn', msg:`샘플 간격 불균일 ${(100*odd/dts.length).toFixed(0)}%` });
+    if (fs < 30) iss.push({ lv:'warn', msg:`샘플링 ${fs.toFixed(0)} Hz — 저크·스펙트럼 신뢰도 낮음` });
+
+    const verdict = iss.some(i => i.lv === 'reject') ? 'reject' : iss.length ? 'warn' : 'ok';
+    return { verdict, issues: iss, tilt, fs };
+  }
+  const VJ = { ok:'정상', warn:'주의', reject:'배제' };
+
   // ---- 리포트 ----
   const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  function svgChart(S, seg) {
+  function svgChart(S, seg, evs) {
     const W = 760, H = 240, L = 46, Rp = 10, T = 12, B = 26, w = W-L-Rp, h = H-T-B, mid = T + h/2;
     const step = Math.max(1, Math.ceil(S.length / 700));
     const D = []; for (let i = 0; i < S.length; i += step) D.push(S[i]); D.push(S[S.length-1]);
@@ -869,6 +1236,13 @@
       const lab=(a,b,t)=>`<text x="${(X(S[a].t)+X(S[b].t))/2}" y="${T+12}" font-size="10" fill="#6b7383" text-anchor="middle">${t}</text>`;
       g += lab(seg.acc[0],seg.acc[1],'가속')+lab(seg.const[0],seg.const[1],'등속')+lab(seg.dec[0],seg.dec[1],'감속'); }
     g += poly('j', jm, '#d9534f') + poly('v', vm, '#2b7fc4') + poly('a', am, '#d99a1a');
+    if (evs && evs.length) {
+      evs.forEach((e, n) => {
+        const x = X(e.t);
+        g += `<line x1="${x}" y1="${T}" x2="${x}" y2="${T+h}" stroke="#b03a2e" stroke-width="0.7" stroke-dasharray="2 3"/>`;
+        g += `<text x="${x}" y="${T+h+11}" font-size="9" fill="#b03a2e" text-anchor="middle">${n+1}</text>`;
+      });
+    }
     g += `<text x="${L}" y="${H-8}" font-size="10" fill="#6b7383">s</text><text x="${L+w}" y="${H-8}" font-size="10" fill="#6b7383" text-anchor="end">a ±${am.toFixed(2)} m/s²  ·  v ±${vm.toFixed(2)} m/s  ·  j ±${jm.toFixed(1)} m/s³</text>`;
     return `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg">${g}</svg>`;
   }
@@ -878,14 +1252,23 @@
     for (const dir of ['up','down']) for (let n = 1; n <= nTrials; n++) { const R = runs[dir+n]; if (R && R.S.length) list.push({ key:dir+n, dir, n, R }); }
     if (!list.length) { msg('리포트에 포함할 측정 데이터가 없습니다.', 'err'); return; }
     const f = x => x.toFixed(2);
-    let sum = '<table><tr><th>회차</th><th>a max</th><th>a min</th><th>v max</th><th>v min</th><th>j max</th><th>j min</th><th>주행시간</th><th>거리</th><th>fs</th></tr>';
+    for (const it of list) it.q = quality(it.R);
+    const good = list.filter(it => it.q.verdict !== 'reject');
+    let sum = '<table><tr><th>회차</th><th>a max</th><th>a min</th><th>v max</th><th>v min</th><th>j max</th><th>j min</th><th>주행시간</th><th>거리</th><th>fs</th><th>판정</th></tr>';
     for (const it of list) { const o = stats(it.R.S), p = it.R.S[it.R.S.length-1];
-      sum += `<tr><td>${DIR[it.dir]} ${it.n}회</td><td>${f(o.aMx)}</td><td>${f(o.aMn)}</td><td>${f(o.vMx)}</td><td>${f(o.vMn)}</td><td>${f(o.jMx)}</td><td>${f(o.jMn)}</td><td>${p.t.toFixed(1)} s</td><td>${f(p.s)} m</td><td>${it.R.fsEst.toFixed(0)} Hz</td></tr>`; }
+      const col = it.q.verdict === 'reject' ? '#b03a2e' : it.q.verdict === 'warn' ? '#a06a00' : '#1a7a4a';
+      sum += `<tr${it.q.verdict==='reject'?' style="color:#8a8f99"':''}><td>${DIR[it.dir]} ${it.n}회</td><td>${f(o.aMx)}</td><td>${f(o.aMn)}</td><td>${f(o.vMx)}</td><td>${f(o.vMn)}</td><td>${f(o.jMx)}</td><td>${f(o.jMn)}</td><td>${p.t.toFixed(1)} s</td><td>${f(p.s)} m</td><td>${it.R.fsEst.toFixed(0)} Hz</td><td style="color:${col}">${VJ[it.q.verdict]}</td></tr>`; }
     sum += '</table>';
+    const rej = list.filter(it => it.q.verdict === 'reject');
+    if (rej.length || list.some(it => it.q.verdict === 'warn')) {
+      sum += '<p class="note"><b>자동 판정 사유</b><br>' + list.filter(it => it.q.issues.length)
+        .map(it => `${DIR[it.dir]} ${it.n}회 [${VJ[it.q.verdict]}] ` + it.q.issues.map(i => i.msg).join('; ')).join('<br>') + '</p>';
+    }
+    if (rej.length) sum += `<p class="note">배제 ${rej.length}건은 아래 방향별 평균에서 제외했습니다. 개별 상세는 그대로 수록합니다.</p>`;
     // 방향별 평균/편차
     let rep = '<table><tr><th>방향</th><th>회수</th><th>|v| max 평균</th><th>|a| max 평균</th><th>|j| max 평균</th><th>거리 평균</th></tr>';
     for (const dir of ['up','down']) {
-      const g = list.filter(x => x.dir === dir); if (!g.length) continue;
+      const g = good.filter(x => x.dir === dir); if (!g.length) continue;
       const av = fn => g.reduce((t,x)=>t+fn(x),0)/g.length;
       rep += `<tr><td>${DIR[dir]}</td><td>${g.length}</td><td>${f(av(x=>{const o=stats(x.R.S);return Math.max(Math.abs(o.vMx),Math.abs(o.vMn));}))}</td><td>${f(av(x=>{const o=stats(x.R.S);return Math.max(Math.abs(o.aMx),Math.abs(o.aMn));}))}</td><td>${f(av(x=>{const o=stats(x.R.S);return Math.max(Math.abs(o.jMx),Math.abs(o.jMn));}))}</td><td>${f(av(x=>x.R.S[x.R.S.length-1].s))}</td></tr>`;
     }
@@ -898,6 +1281,37 @@
       isoTbl += `<tr><td>${DIR[it.dir]} ${it.n}회</td><td>${g(q.z.max,q.z.a95)}</td><td>${g(q.x.max,q.x.a95)}</td><td>${g(q.y.max,q.y.a95)}</td><td>${q.aMax.toFixed(2)}</td><td>${q.dMax.toFixed(2)}</td><td>${q.jMax.toFixed(2)}</td><td>${q.vMax.toFixed(2)}</td><td>${q.cvDur.toFixed(1)} s${q.full?'*':''}</td></tr>`;
     }
     isoTbl += '</table><p class="note">VPPV = 영교차점 사이 peak-to-peak 진동값(m/s²), 등속 구간 기준. A95 = 전체 VPPV의 95 백분위. 최대 가속·감속은 1 Hz 2극 버터워스, 속도는 10 Hz 저역통과 신호 적분. * 는 등속 구간을 분리하지 못해 전 구간으로 대체.</p>';
+    let nzTbl = '', anyNz = list.some(it => it.R.nz && it.R.nz.length > 4);
+    if (anyNz) {
+      nzTbl = '<table><tr><th>회차</th><th>구간</th><th>Leq</th><th>Lmax(Fast)</th><th>L10</th><th>L95</th><th>샘플</th></tr>';
+      for (const it of list) {
+        const nq = noiseCv(it.R); if (!nq || !nq.cv) continue;
+        const nm = `${DIR[it.dir]} ${it.n}회`;
+        const row = (lab, o) => o ? `<tr><td>${nm}</td><td>${lab}</td><td>${o.leq.toFixed(1)}</td><td>${o.lmax.toFixed(1)}</td><td>${o.l10.toFixed(1)}</td><td>${o.l95.toFixed(1)}</td><td>${o.n}</td></tr>` : '';
+        nzTbl += row(nq.cvSeg ? '등속' : '전체(등속 미분리)', nq.cv) + row('전체 주행', nq.all);
+      }
+      const off = +($('ncal').value || 0);
+      nzTbl += `</table><p class="note">단위 ${off === 0 ? 'dBFS(A) — 미보정 상대값' : `dB(A) (보정 오프셋 ${off.toFixed(1)} dB 적용)`}. A 특성은 IEC 61672 해석식을 FFT 빈별로 적용해 산출. Leq = 에너지 평균, Lmax = 125 ms(Fast) 평균의 최대, L10/L95 = 상위 10 / 하위 5 백분위. 스마트폰 마이크는 음압 교정·자유음장 보정이 되어 있지 않으므로 절대 음압 레벨이 아니라 상대 비교용입니다.</p>`;
+    }
+    let fsTbl = '', anyFs = false;
+    {
+      let t2 = '<table><tr><th>회차</th><th>피크 주파수</th><th>진폭</th><th>파장 λ = v/f</th><th>가장 가까운 후보</th><th>편차</th><th>추정</th></tr>';
+      for (const it of list) {
+        const q = freqSources(it.R); if (!q) continue;
+        anyFs = true;
+        q.rows.forEach((r2, n) => {
+          const est = !r2.best ? '—'
+            : r2.hit ? (r2.best.kind === 'rot' ? '회전 기인' : '레일·공간 기인') + (r2.evMatch ? ' · 충격 이벤트 간격과 일치' : '')
+            : '미상';
+          t2 += `<tr><td>${n === 0 ? `${DIR[it.dir]} ${it.n}회 (v ${q.v.toFixed(2)} m/s)` : ''}</td><td>${r2.f.toFixed(2)} Hz</td><td>${r2.amp.toFixed(3)}</td><td>${r2.lam.toFixed(3)} m</td><td>${r2.best ? r2.best.label + ` (λ ${r2.best.lam.toFixed(3)} m)` + (r2.ambig ? `<br><span style="color:#6b7383">구분 불가: ${r2.ambig}</span>` : '') : '—'}</td><td>${r2.best ? (r2.best.dev*100).toFixed(1) + ' %' : '—'}</td><td>${est}</td></tr>`;
+        });
+      }
+      t2 += '</table>';
+      const m = machSpec();
+      t2 += `<p class="note">판별 원리: 회전 기인 진동은 <b>로프 이동거리</b>에 대해 주기적이므로 카 기준 파장 λ = π·D / (로핑 × 차수)로 고정되고, 레일 이음부·브래킷은 <b>카 이동거리</b>에 대해 주기적이므로 λ = 설치 피치와 같습니다. 측정된 피크의 λ = v/f 를 두 계열과 대조해 추정합니다. 허용 편차는 8 % 또는 주파수 분해능 Δf의 1.5배 중 큰 값.</p>`;
+      t2 += `<p class="note">입력 제원: 시브 직경 ${m.dia > 0 ? (m.dia*1000).toFixed(0)+' mm' : '미입력'} · 로핑 ${m.rope}:1 · 감속비 ${m.gear} · 극수 ${m.pole || '미입력'} · 레일 ${m.rail} m · 브래킷 ${m.brk} m. 시브 직경과 극수를 입력하지 않으면 회전 계열 후보가 생성되지 않아 모두 레일 계열로만 대조됩니다.</p>`;
+      fsTbl = t2;
+    }
     let rbTbl = '<table><tr><th>회차</th><th>개방 시점</th><th>가속 개시</th><th>롤백 구간</th><th>최대 변위</th><th>최대 속도</th><th>가속도 피크</th><th>방향</th><th>판정</th></tr>';
     for (const it of list) {
       const q = rollback(it.R);
@@ -926,7 +1340,9 @@
         fftTbl += `<tr><td>${sp.axis} · ${sp.seg}${sp.fallback?'*':''}</td><td>${sp.dur.toFixed(1)} s</td><td>${sp.fs.toFixed(0)} Hz</td><td>${sp.df.toFixed(2)} Hz</td><td>${pk(0)}</td><td>${pk(1)}</td><td>${pk(2)}</td></tr>`;
       }
       fftTbl += '</table><p class="note">피크 = 주파수 / 진폭(m/s²), 원시 가속도 기준. * 표시는 구간 샘플 부족으로 전체 구간 대체.</p>';
-      body += `<section><h3>${DIR[it.dir]} ${it.n}회</h3>${svgChart(S, seg)}
+      const ve = vibEvents(it.R);
+      const evList = ve ? ve.ev : [];
+      body += `<section><h3>${DIR[it.dir]} ${it.n}회 <span style="font-size:12px;font-weight:400;color:${it.q.verdict==='reject'?'#b03a2e':it.q.verdict==='warn'?'#a06a00':'#1a7a4a'}">[${VJ[it.q.verdict]}]</span></h3>${it.q.issues.length ? `<p class="note">${it.q.issues.map(i => i.msg).join(' · ')}</p>` : ''}${svgChart(S, seg, evList)}
         <table><tr><th>항목</th><th>max</th><th>min</th></tr>
         <tr><td>가속도 (m/s²)</td><td>${f(o.aMx)}</td><td>${f(o.aMn)}</td></tr>
         <tr><td>속도 (m/s)</td><td>${f(o.vMx)}</td><td>${f(o.vMn)}</td></tr>
@@ -934,6 +1350,18 @@
         ${(() => { const hz = horizStats(S); return hz ? `<tr><td>수평 전후 (m/s²)</td><td>${f(hz.xMx)}</td><td>${f(hz.xMn)}</td></tr><tr><td>수평 좌우 (m/s²)</td><td>${f(hz.yMx)}</td><td>${f(hz.yMn)}</td></tr><tr><td>저크 전후 (m/s³)</td><td>${f(axStats(S,'jx').mx)}</td><td>${f(axStats(S,'jx').mn)}</td></tr><tr><td>저크 좌우 (m/s³)</td><td>${f(axStats(S,'jy').mx)}</td><td>${f(axStats(S,'jy').mn)}</td></tr>` : ''; })()}</table>
         ${(() => { const hz = horizStats(S); return hz ? `<p class="note">수평 진동 전후 p-p ${hz.xpp.toFixed(3)} · rms ${hz.xrms.toFixed(3)} / 좌우 p-p ${hz.ypp.toFixed(3)} · rms ${hz.yrms.toFixed(3)} m/s²</p>` : ''; })()}
         <p class="note">주행 시간 ${p.t.toFixed(1)} s · 이동 거리 ${f(p.s)} m · 샘플 ${S.length} @ ${it.R.fsEst.toFixed(0)} Hz · 드리프트 보정 ${it.R.src ? '(파일)' : it.R.bias==null ? '—' : (it.R.bias*1000).toFixed(1)+' mm/s²'}</p>
+        <h4 style="font-size:13px;margin:14px 0 2px;color:#42506b">3축 진동 파형 (ISO 18738 축 표기)</h4>
+        ${svgVib3(it.R)}
+        ${(() => {
+          if (!ve || !evList.length) return ve ? '<p class="note">등속 구간에서 임계값을 넘는 진동 이벤트가 검출되지 않았습니다.</p>' : '';
+          let h2 = `<p class="note"><b>진동 이벤트 위치</b> — 등속 구간${ve.cvSeg?'':'(전체 대체)'} 1 Hz 이상 성분이 임계값(축별 robust σ(MAD)의 6배, 최소 0.08 m/s²)을 넘는 지점. 그래프 위 번호와 대응.</p>`;
+          h2 += '<table><tr><th>#</th><th>위치 (m)</th><th>시각 (s)</th><th>축</th><th>피크 (m/s²)</th><th>임계 대비</th></tr>';
+          evList.forEach((e, n) => { h2 += `<tr><td>${n+1}</td><td>${e.s.toFixed(2)}</td><td>${e.t.toFixed(2)}</td><td>${e.axis}</td><td>${e.amp.toFixed(3)}</td><td>${e.ratio.toFixed(1)}배</td></tr>`; });
+          h2 += '</table>';
+          if (ve.spacing) h2 += `<p class="note">이벤트 간 거리 중앙값 ${ve.spacing.med.toFixed(2)} m · 평균 ${ve.spacing.mean.toFixed(2)} m (${ve.spacing.n}구간). 가이드레일 이음부 피치와 대조해 보십시오.</p>`;
+          h2 += `<p class="note">임계값 수직 ${ve.thr.ar.toFixed(3)} · 전후 ${ve.thr.xr.toFixed(3)} · 좌우 ${ve.thr.yr.toFixed(3)} m/s² (등속 구간 robust σ 수직 ${ve.rms.ar.toFixed(3)} · 전후 ${ve.rms.xr.toFixed(3)} · 좌우 ${ve.rms.yr.toFixed(3)})</p>`;
+          return h2;
+        })()}
         ${fftTbl}</section>`;
     }
     const now = new Date();
@@ -957,12 +1385,14 @@
       ${geo ? `위치 ${geo.lat.toFixed(6)}, ${geo.lon.toFixed(6)} (±${geo.acc.toFixed(0)} m) · <a href="https://www.google.com/maps?q=${geo.lat},${geo.lon}">지도</a><br>` : ''}
       측정자 ${esc(meta.by)||'—'} · 작성 ${now.toLocaleString('ko-KR')}</p>
       <h2>1. 전 회차 측정값</h2>${sum}
-      <h2>2. 방향별 평균</h2>${rep}
+      <h2>2. 방향별 평균 (배제 건 제외)</h2>${rep}
       <h2>3. ISO 18738 산출값 (참고)</h2>${isoTbl}
-      <h2>4. 안티롤백 분석 (참고)</h2>${rbTbl}
+      ${anyFs ? `<h2>4. 주파수 원인 추정 (참고)</h2>${fsTbl}` : ''}
+      ${anyNz ? `<h2>${anyFs ? 5 : 4}. 소음 측정 (참고)</h2>${nzTbl}` : ''}
+      <h2>${4 + (anyFs?1:0) + (anyNz?1:0)}. 안티롤백 분석 (참고)</h2>${rbTbl}
       <p class="lg"><i style="background:#d99a1a"></i>가속도<i style="background:#1a9e6a"></i>변위(mm)<i style="background:#2b7fc4"></i>속도(mm/s, 1/10 스케일)</p>
       ${rbFig}
-      <h2>5. 회차별 상세</h2>
+      <h2>${5 + (anyFs?1:0) + (anyNz?1:0)}. 회차별 상세</h2>
       <p class="lg"><i style="background:#d99a1a"></i>가속도<i style="background:#2b7fc4"></i>속도<i style="background:#d9534f"></i>저크</p>
       ${body}
       <p class="note" style="margin-top:22px">측정: 스마트폰 3축 가속도계, 정지 시 중력벡터에 투영한 연직 성분. 수평 2축은 보정 시 정한 수평면 직교 기저에 투영(전후 = 기기 세로축의 수평 성분, 좌우 = 그 직교축). 가속도·수평 ${$('fc').value} Hz / 저크 ${$('jfc').value} Hz 2단 저역통과. 속도·거리는 사다리꼴 적분 후 종료 시 v=0 조건으로 선형 드리프트 보정. FFT는 필터 전 원시 가속도에 Hann 윈도우 적용.
@@ -1041,7 +1471,7 @@ ISO 18738 항목은 규격의 산출 절차(영교차점 VPPV, 1 Hz 버터워스
   }
   function setMicUI() {
     $('mic').classList.toggle('on', micOn);
-    $('mic').textContent = micOn ? '🎤 음성 명령 켜짐 (탭하면 끔)' : '🎤 음성 명령 꺼짐';
+    $('mic').textContent = micOn ? '🎤 음성\n켜짐' : '🎤 음성\n꺼짐';
   }
   $('mic').onclick = micToggle;
 
