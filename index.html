@@ -58,7 +58,7 @@
   th,td{text-align:right;padding:4px 2px;border-top:1px solid var(--line);white-space:nowrap}
   th{color:var(--dim);font-weight:500;font-size:11px}
   td:first-child,th:first-child{text-align:left}
-  .btns{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:auto}
+  .btns{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:auto}
   #msg{order:0}
   button.mic.on{background:var(--ok);color:var(--bg);border-color:var(--ok)}
   button.mic{white-space:pre-line}
@@ -164,6 +164,7 @@
     <input id="m-site" placeholder="현장명"><input id="m-unit" placeholder="호기 / 기종">
     <input id="m-spec" placeholder="정격 속도·적재 (예: 1.0 m/s, 1000 kg)"><input id="m-by" placeholder="측정자">
     <input id="m-addr" placeholder="주소 (위치 확인 시 자동)" style="grid-column:1/-1">
+    <input id="m-mail" placeholder="메일 수신자 (쉼표로 여러 명)" style="grid-column:1/-1">
   </div>
   <div class="row" style="margin-top:6px">
     <button class="sub" id="geo" style="padding:8px 12px;flex:0 0 auto">현재 위치로 현장 확인</button>
@@ -176,6 +177,7 @@
   <button class="sub" id="load">CSV 불러오기</button>
   <button class="sub" id="reset" disabled>초기화</button>
   <button class="sub" id="report">리포트</button>
+  <button class="sub" id="mail" disabled>메일 전송</button>
   <input type="file" id="file" accept=".csv,text/csv" hidden>
 </div>
 
@@ -659,7 +661,7 @@
 
   // ---- 위치 ----
   let geo = null;  // {lat, lon, acc, ts, addr}
-  const MKEYS = ['m-site','m-unit','m-spec','m-by','m-addr','p-dia','p-rope','p-gear','p-pole','p-rail','p-brk'];
+  const MKEYS = ['m-site','m-unit','m-spec','m-by','m-addr','m-mail','p-dia','p-rope','p-gear','p-pole','p-rail','p-brk'];
   function saveMeta() {
     try { localStorage.setItem('erm2meta', JSON.stringify({ v:MKEYS.map(k => $(k).value), geo })); } catch(_) {}
   }
@@ -1398,13 +1400,63 @@
       <p class="note" style="margin-top:22px">측정: 스마트폰 3축 가속도계, 정지 시 중력벡터에 투영한 연직 성분. 수평 2축은 보정 시 정한 수평면 직교 기저에 투영(전후 = 기기 세로축의 수평 성분, 좌우 = 그 직교축). 가속도·수평 ${$('fc').value} Hz / 저크 ${$('jfc').value} Hz 2단 저역통과. 속도·거리는 사다리꼴 적분 후 종료 시 v=0 조건으로 선형 드리프트 보정. FFT는 필터 전 원시 가속도에 Hann 윈도우 적용.
 ISO 18738 항목은 규격의 산출 절차(영교차점 VPPV, 1 Hz 버터워스 구간 판정, 10 Hz 적분 속도)를 따르되 주파수 가중은 적용하지 않았고, 스마트폰 센서로 측정했으므로 규격의 계측기 요구사항은 충족하지 않습니다. 참고값입니다.</p>
       <button onclick="print()">인쇄 / PDF 저장</button></body></html>`;
+    const fname = `ride_report_${(meta.unit||'unit').replace(/\s+/g,'')}_${now.toISOString().slice(0,10)}.html`;
     const blob = new Blob([html], {type:'text/html'});
+    lastReport = { blob, fname, meta, n:list.length, date:now };
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `ride_report_${(meta.unit||'unit').replace(/\s+/g,'')}_${now.toISOString().slice(0,10)}.html`;
+    a.href = url; a.download = fname;
     a.click(); setTimeout(() => URL.revokeObjectURL(url), 3000);
-    msg(`리포트 생성 (${list.length}건). 다운로드한 파일을 열고 인쇄 → PDF로 저장하세요.`, 'ok');
+    $('mail').disabled = false;
+    msg(`리포트 생성 (${list.length}건). 메일로 보내려면 아래 '메일 전송'을 누르세요.`, 'ok');
   }
+
+  // ================= 리포트 메일 전송 =================
+  // 정적 웹앱은 서버가 없어 무인 발송이 불가능하다. 파일이 첨부된 상태로 메일 앱을 띄운다.
+  let lastReport = null;
+  function mailSubject(r) {
+    const d = r.date.toISOString().slice(0,10);
+    return `[승강기 주행계측] ${r.meta.site || '현장'} ${r.meta.unit || ''} ${d}`.replace(/\s+/g,' ').trim();
+  }
+  function mailBody(r) {
+    const L = [];
+    L.push('승강기 주행 계측 리포트를 보냅니다.');
+    L.push('');
+    L.push(`현장: ${r.meta.site || '—'}`);
+    L.push(`호기/기종: ${r.meta.unit || '—'}`);
+    L.push(`사양: ${r.meta.spec || '—'}`);
+    if (r.meta.addr) L.push(`주소: ${r.meta.addr}`);
+    if (geo) L.push(`위치: ${geo.lat.toFixed(6)}, ${geo.lon.toFixed(6)} (±${geo.acc.toFixed(0)} m)`);
+    L.push(`측정자: ${r.meta.by || '—'}`);
+    L.push(`측정 회차: ${r.n}건`);
+    L.push(`작성: ${r.date.toLocaleString('ko-KR')}`);
+    L.push('');
+    L.push('첨부된 HTML 파일을 브라우저로 열면 표와 그래프를 볼 수 있고, 인쇄 → PDF 저장이 가능합니다.');
+    return L.join('\n');
+  }
+  async function mailReport() {
+    if (!lastReport) { msg('먼저 리포트를 생성하세요.', 'err'); return; }
+    const r = lastReport;
+    const to = ($('m-mail').value || '').trim();
+    const sub = mailSubject(r), body = mailBody(r);
+    // 1순위: 파일 공유 (Gmail·아웃룩·카톡 등으로 첨부 전달)
+    try {
+      const file = new File([r.blob], r.fname, { type:'text/html' });
+      if (navigator.canShare && navigator.canShare({ files:[file] })) {
+        await navigator.share({ files:[file], title: sub, text: body });
+        msg('공유 시트로 전달했습니다.', 'ok');
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') { msg('전송을 취소했습니다.'); return; }
+    }
+    // 2순위: 메일 앱만 열고 첨부는 수동 (mailto 는 첨부를 지원하지 않는다)
+    const href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body + '\n\n※ 다운로드된 리포트 파일을 첨부해 주세요.')}`;
+    location.href = href;
+    msg('메일 앱을 열었습니다. mailto 방식은 첨부를 지원하지 않으니 다운로드한 리포트 파일을 직접 첨부하세요.');
+  }
+  $('mail').onclick = mailReport;
+
   $('report').onclick = buildReport;
 
 
