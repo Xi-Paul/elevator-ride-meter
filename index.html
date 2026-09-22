@@ -75,37 +75,23 @@
   body.rec header span{font-size:14px;color:var(--ink);font-weight:600}
   /* 측정 중 가로 화면: 수치는 왼쪽 한 줄, 파형이 남는 폭과 높이를 모두 차지 */
   @media (orientation: landscape) {
+    /* 자동 배치에 맡기면 DOM 순서상 버튼줄이 그래프 칸과 겹쳐 잘린다 → 행·열을 모두 명시 */
     body.rec{height:100dvh;overflow:hidden;display:grid;gap:8px;
-      grid-template-columns:200px 1fr;grid-template-rows:auto 1fr auto auto}
-    body.rec header{grid-column:1/-1;padding-top:6px}
-    body.rec .readouts{grid-column:1;grid-row:2;grid-template-columns:1fr;align-content:start;gap:6px}
-    body.rec .ro{padding:8px 10px 6px}
-    body.rec .ro .v{font-size:30px}
+      grid-template-columns:190px 1fr;grid-template-rows:auto auto minmax(0,1fr) auto}
+    body.rec header{grid-column:1/-1;grid-row:1;padding-top:4px}
+    body.rec .gorow{grid-column:1/-1;grid-row:2}
+    body.rec .readouts{grid-column:1;grid-row:3;grid-template-columns:1fr;align-content:start;gap:6px;min-height:0;overflow:hidden}
+    body.rec canvas{grid-column:2;grid-row:3;height:100%;min-height:0}
+    body.rec #msg{grid-column:1/-1;grid-row:4;min-height:0}
+    body.rec .stats{display:none}
+    body.rec .ro{padding:6px 10px 5px}
+    body.rec .ro .v{font-size:26px}
+    body.rec .ro .k{font-size:11px}
     body.rec .ro .u{display:none}
-    body.rec canvas{grid-column:2;grid-row:2;height:100%}
-    body.rec .stats{grid-column:1/-1;padding:6px 10px;font-size:12px}
-    body.rec #msg{grid-column:1/-1;min-height:0}
-    body.rec .gorow{grid-column:1/-1}
-    body.rec button.main{padding:14px;font-size:17px}
+    body.rec .ro .p{font-size:11px;margin-top:2px}
+    body.rec button.main{padding:12px;font-size:17px}
+    body.rec button.abort{padding:8px 6px;font-size:12px;width:88px}
   }
-  button.mic.on{background:var(--ok);color:var(--bg);border-color:var(--ok)}
-  button.mic{white-space:pre-line}
-  .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
-  details .row button{border-radius:8px}
-  .meta input{background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:8px;font-size:13px;font-family:inherit;min-width:0}
-  button{border:0;border-radius:12px;padding:16px;font-size:16px;font-weight:600;color:var(--bg);background:var(--ink);font-family:inherit}
-  .gorow{display:flex;gap:8px;align-items:stretch}
-  button.main{flex:1;background:var(--acc);padding:15px}
-  button.abort{display:none}
-  body.rec button.abort{display:block;flex:0 0 auto;width:96px;background:transparent;color:var(--jrk);
-    border:1px solid var(--jrk);font-size:13px;font-weight:600;padding:10px 6px;line-height:1.25;white-space:pre-line}
-  button.mic{flex:0 0 auto;width:112px;background:var(--panel);color:var(--dim);border:1px solid var(--line);font-size:12px;font-weight:500;padding:10px 6px;line-height:1.25}
-  button.main.stop{background:var(--jrk)}
-  button.sub{background:var(--panel);color:var(--ink);border:1px solid var(--line);font-weight:500;font-size:14px;padding:12px}
-  button:disabled{opacity:.4}
-  button:focus-visible{outline:2px solid var(--vel);outline-offset:2px}
-  #msg{font-size:13px;color:var(--dim);min-height:18px;text-align:center}
-  #msg.ok{color:var(--ok)} #msg.err{color:var(--jrk)}
 </style>
 </head>
 <body>
