@@ -60,6 +60,34 @@
   td:first-child,th:first-child{text-align:left}
   .btns{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:auto}
   #msg{order:0}
+  /* 측정 중: 설정·부가 UI를 감추고 수치와 그래프만 남긴다 */
+  body.rec .tabs, body.rec .trials, body.rec .legend, body.rec .row,
+  body.rec details, body.rec .btns, body.rec button.mic { display:none }
+  body.rec .ro{padding:16px 12px 12px}
+  body.rec .ro .v{font-size:42px}
+  body.rec .ro .k{font-size:13px}
+  body.rec .ro .p{font-size:13px}
+  body.rec canvas{height:280px}
+  body.rec #msg{font-size:14px}
+  body.rec .stats{font-size:14px}
+  body.rec button.main{padding:22px;font-size:19px}
+  body.rec header h1{font-size:15px}
+  body.rec header span{font-size:14px;color:var(--ink);font-weight:600}
+  /* 측정 중 가로 화면: 수치는 왼쪽 한 줄, 파형이 남는 폭과 높이를 모두 차지 */
+  @media (orientation: landscape) {
+    body.rec{height:100dvh;overflow:hidden;display:grid;gap:8px;
+      grid-template-columns:200px 1fr;grid-template-rows:auto 1fr auto auto}
+    body.rec header{grid-column:1/-1;padding-top:6px}
+    body.rec .readouts{grid-column:1;grid-row:2;grid-template-columns:1fr;align-content:start;gap:6px}
+    body.rec .ro{padding:8px 10px 6px}
+    body.rec .ro .v{font-size:30px}
+    body.rec .ro .u{display:none}
+    body.rec canvas{grid-column:2;grid-row:2;height:100%}
+    body.rec .stats{grid-column:1/-1;padding:6px 10px;font-size:12px}
+    body.rec #msg{grid-column:1/-1;min-height:0}
+    body.rec .gorow{grid-column:1/-1}
+    body.rec button.main{padding:14px;font-size:17px}
+  }
   button.mic.on{background:var(--ok);color:var(--bg);border-color:var(--ok)}
   button.mic{white-space:pre-line}
   .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
@@ -97,6 +125,7 @@
   <label for="axis">표시 축</label>
   <select id="axis" style="flex:1"><option value="v" selected>수직 (가속도·속도·저크)</option><option value="x">수평 전후 (진동)</option><option value="y">수평 좌우 (진동)</option></select>
   <label style="white-space:nowrap"><input type="checkbox" id="autodir" checked> 방향 자동</label>
+  <label style="white-space:nowrap"><input type="checkbox" id="landscape"> 측정 시 가로 고정</label>
 </div>
 <div class="row" style="gap:6px">
   <label style="white-space:nowrap"><input type="checkbox" id="noise"> 소음 측정</label>
@@ -333,6 +362,8 @@
   function finish(auto) {
     const key = recKey, R = runs[key];
     stopSensor();
+    try { screen.orientation.unlock(); } catch(_) {}
+    if (document.fullscreenElement) { try { document.exitFullscreen(); } catch(_) {} }
     cancelAnimationFrame(raf);
     if (wake) { wake.release(); wake = null; }
     recKey = null;
@@ -581,6 +612,7 @@
   }
   function refreshUI() {
     const key = kid(cur), R = R_(key);
+    document.body.classList.toggle('rec', !!recKey);
     document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.dir === cur.dir));
     document.querySelectorAll('.chip').forEach(b => {
       const k = cur.dir + b.dataset.n, r = runs[k];
@@ -622,6 +654,10 @@
       runs[key] = newRun(); runs[key].state = 'calib';
       recKey = key; calibBuf = []; setView('time');
       await startSensor();
+      if ($('landscape').checked) {
+        try { await document.documentElement.requestFullscreen(); } catch(_) {}
+        try { await screen.orientation.lock('landscape'); } catch(_) {}
+      }
       refreshUI(); msg(`[${label(cur)}] 영점 잡는 중… 2초간 움직이지 마세요.`);
       msg(`[${label(cur)}] 영점 잡는 중… (${srcName}) 2초간 움직이지 마세요.`);
       setTimeout(() => { if (runs[recKey]?.state === 'calib' && calibBuf.length === 0) msg('센서 데이터가 들어오지 않습니다. Chrome에서 열었는지 확인하세요.', 'err'); }, 1500);
@@ -1670,6 +1706,7 @@ ISO 18738 항목은 규격의 산출 절차(영교차점 VPPV, 1 Hz 버터워스
   $('file').onchange = e => { if (e.target.files[0]) importCsv(e.target.files[0]); e.target.value = ''; };
   $('go').onclick = start; $('reset').onclick = reset; $('csv').onclick = exportCsv;
   addEventListener('resize', draw);
+  addEventListener('orientationchange', () => setTimeout(draw, 250));
   load(); loadMeta(); buildTrials(); refreshUI(); setMicUI(); msg(IDLE_MSG);
 })();
 </script>
