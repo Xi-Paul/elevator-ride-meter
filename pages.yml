@@ -1,0 +1,39 @@
+name: Deploy web app
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # 커밋 해시와 빌드 시각을 파일에 새겨 넣는다 → 배포될 때마다 버전이 자동으로 바뀐다
+      - name: Stamp version
+        run: |
+          VER="${GITHUB_SHA::7}"
+          BUILT="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          echo "version = $VER ($BUILT)"
+          sed -i "s|__VERSION__|$VER|g; s|__BUILT__|$BUILT|g" sw.js version.json index.html
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deploy
+        uses: actions/deploy-pages@v4
