@@ -100,6 +100,7 @@
   <span id="fs">— Hz</span>
 </header>
 
+<div id="upd" style="display:none;background:var(--ok);color:var(--bg);border-radius:10px;padding:10px 12px;font-size:13px;font-weight:600;align-items:center;gap:8px"><span id="updTxt">새 버전이 있습니다</span><button id="updBtn" style="margin-left:auto;padding:8px 12px;border-radius:8px;background:var(--bg);color:var(--ok);font-size:13px">지금 적용</button></div>
 <div class="tabs">
   <button class="tab on" data-dir="up">상승</button>
   <button class="tab" data-dir="down">하강</button>
@@ -168,6 +169,7 @@
 </div>
 
 <details><summary>시험 결과 요약 (전 회차)</summary><table id="sum"></table></details>
+<div style="font-size:11px;color:var(--dim);text-align:center">버전 <span id="ver">__VERSION__</span></div>
 <details><summary>설비 제원 (주파수 원인 추정용)</summary>
   <div class="meta">
     <input id="p-dia" type="number" step="1" placeholder="시브 직경 mm (예: 400)">
@@ -1732,6 +1734,50 @@ ISO 18738 항목은 규격의 산출 절차(영교차점 VPPV, 1 Hz 버터워스
   $('go').onclick = start; $('reset').onclick = reset; $('csv').onclick = exportCsv;
   addEventListener('resize', draw);
   addEventListener('orientationchange', () => setTimeout(draw, 250));
+
+  // ================= 자동 업데이트 =================
+  // 서비스 워커로 오프라인 동작 + 새 버전 감지. 코드가 배포되면 다음 실행에서 배너가 뜬다.
+  let swReg = null;
+  async function initUpdate() {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+      swReg = await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+      const show = () => {
+        if (recKey) return;   // 측정 중에는 방해하지 않는다
+        $('upd').style.display = 'flex';
+      };
+      if (swReg.waiting) show();
+      swReg.addEventListener('updatefound', () => {
+        const nw = swReg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', () => {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) show();
+        });
+      });
+      let reloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloading) return; reloading = true; location.reload();
+      });
+      $('updBtn').onclick = () => {
+        $('updBtn').textContent = '적용 중…';
+        if (swReg.waiting) swReg.waiting.postMessage('skipWaiting');
+        else location.reload();
+      };
+      // 앱을 다시 열거나 포그라운드로 돌아올 때마다 새 버전 확인
+      const check = () => { if (!recKey) swReg.update().catch(() => {}); };
+      setInterval(check, 30 * 60 * 1000);
+      addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+      check();
+      // 배포 버전 표기
+      try {
+        const r = await fetch('version.json', { cache: 'no-store' });
+        const v = await r.json();
+        if (v.version && !/^__/.test(v.version)) $('ver').textContent = `${v.version} · ${v.built || ''}`;
+      } catch (_) {}
+    } catch (_) {}
+  }
+  initUpdate();
+
   load(); loadMeta(); buildTrials(); refreshUI(); setMicUI(); msg(IDLE_MSG);
 })();
 </script>
