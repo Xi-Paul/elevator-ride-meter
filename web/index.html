@@ -79,6 +79,9 @@
   .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
   .meta input{background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:8px;font-size:13px;font-family:inherit;min-width:0}
   details .row button{border-radius:8px}
+  .optwrap{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+  .optwrap .row{gap:6px;flex-wrap:wrap}
+  .optwrap label{font-size:12px;color:var(--dim)}
   #msg{order:0}
   /* 측정 중: 설정·부가 UI를 감추고 수치와 그래프만 남긴다 */
   body.rec .tabs, body.rec .trials, body.rec .legend, body.rec .row,
@@ -132,18 +135,6 @@
   <button class="abort" id="abort">취소<br>(폐기)</button>
 </div>
 <div id="msg"></div>
-<div class="row" style="gap:6px">
-  <label for="axis">표시 축</label>
-  <select id="axis" style="flex:1"><option value="v" selected>수직 (가속도·속도·저크)</option><option value="x">수평 전후 (진동)</option><option value="y">수평 좌우 (진동)</option></select>
-  <label style="white-space:nowrap"><input type="checkbox" id="autodir" checked> 방향 자동</label>
-  <label style="white-space:nowrap"><input type="checkbox" id="landscape"> 측정 시 가로 고정</label>
-</div>
-<div class="row" style="gap:6px">
-  <label style="white-space:nowrap"><input type="checkbox" id="noise"> 소음 측정</label>
-  <label for="ncal">보정</label>
-  <input id="ncal" type="number" step="0.1" value="0" style="width:72px;background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px;font-size:13px">
-  <span style="font-size:11px;color:var(--dim)">dB 오프셋 (0 = 미보정, dBFS 표기)</span>
-</div>
 
 <div class="readouts">
   <div class="ro" style="--c:var(--acc)"><div class="k" id="k1">가속도</div><div class="v" id="a">0.00</div><div class="u" id="u1">m/s²</div><div class="p"><em>max</em> <span id="amax">0.00</span><br><em>min</em> <span id="amin">0.00</span></div></div>
@@ -172,6 +163,22 @@
   <div id="peaks"></div>
 </div>
 
+<details id="opt"><summary>측정 설정</summary>
+  <div class="optwrap">
+    <div class="row">
+      <label for="axis">표시 축</label>
+      <select id="axis" style="flex:1"><option value="v" selected>수직 (가속도·속도·저크)</option><option value="x">수평 전후 (진동)</option><option value="y">수평 좌우 (진동)</option></select>
+    </div>
+    <div class="row" style="gap:14px;flex-wrap:wrap">
+      <label><input type="checkbox" id="autodir" checked> 방향 자동 판정</label>
+      <label><input type="checkbox" id="landscape"> 측정 시 가로 고정</label>
+      <label><input type="checkbox" id="noise"> 소음 측정</label>
+    </div>
+    <div class="row">
+      <label for="ncal">소음 보정</label>
+      <input id="ncal" type="number" step="0.1" value="0" style="width:72px;background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px;font-size:13px">
+      <span style="font-size:11px;color:var(--dim)">dB 오프셋 (0 = 미보정)</span>
+    </div>
 <div class="row">
   <label for="fc">LPF</label>
   <select id="fc"><option value="2">2 Hz</option><option value="3" selected>3 Hz</option><option value="5">5 Hz</option><option value="8">8 Hz</option></select>
@@ -187,7 +194,8 @@
   <label for="fseg">FFT 구간</label>
   <select id="fseg"><option value="const" selected>등속</option><option value="acc">가속</option><option value="dec">감속</option><option value="all">전체</option></select>
 </div>
-
+  </div>
+</details>
 <details><summary>시험 결과 요약 (전 회차)</summary><table id="sum"></table></details>
 <div style="font-size:11px;color:var(--dim);text-align:center">버전 <span id="ver">__VERSION__</span></div>
 <details><summary>설비 제원 (주파수 원인 추정용)</summary>
