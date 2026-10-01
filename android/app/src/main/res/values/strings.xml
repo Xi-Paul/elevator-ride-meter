@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">주행 계측</string>
+    <!-- APK 자동 업데이트 확인 대상. 저장소 이름이 다르면 이 줄만 고치면 된다. -->
+    <string name="update_repo">Xi-Paul/elevator-ride-meter</string>
+</resources>
