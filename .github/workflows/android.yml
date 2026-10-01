@@ -1,0 +1,73 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'android-src.zip'
+      - 'android/**'
+      - '.github/workflows/android.yml'
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 소스는 android/ 디렉터리에 두거나, 폰에서 올리기 쉽게 android-src.zip 으로 둬도 된다
+      - name: Prepare source
+        run: |
+          mkdir -p android
+          if [ -f android-src.zip ]; then unzip -o android-src.zip -d android; fi
+          echo "--- tree ---"
+          find android -name '*.kts' -o -name '*.kt' -o -name 'AndroidManifest.xml' | sort | head -40
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build release APK
+        working-directory: android
+        run: |
+          VER="${GITHUB_REF_NAME}"
+          case "$VER" in v*) ;; *) VER="dev-${GITHUB_SHA::7}" ;; esac
+          CODE=$(( $(date -u +%s) / 60 ))
+          echo "versionName=$VER versionCode=$CODE"
+          gradle assembleRelease --no-daemon --stacktrace -PverName="$VER" -PverCode="$CODE"
+
+      - name: Collect APK
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/*.apk out/ride-meter.apk
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ride-meter-apk
+          path: out/ride-meter.apk
+          if-no-files-found: error
+
+      # v로 시작하는 태그를 붙여 push 하면 로그인 없이 받을 수 있는 Release 가 만들어진다
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/ride-meter.apk
+          generate_release_notes: true
