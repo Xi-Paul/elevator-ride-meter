@@ -59,6 +59,26 @@
   th{color:var(--dim);font-weight:500;font-size:11px}
   td:first-child,th:first-child{text-align:left}
   .btns{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:auto}
+  .gorow{display:flex;gap:8px;align-items:stretch}
+  button{border:0;border-radius:12px;padding:16px;font-size:16px;font-weight:600;color:var(--bg);background:var(--ink);font-family:inherit}
+  button.main{flex:1;background:var(--acc);padding:15px}
+  button.main.stop{background:var(--jrk)}
+  button.sub{background:var(--panel);color:var(--ink);border:1px solid var(--line);font-weight:500;font-size:14px;padding:12px}
+  button.abort{display:none}
+  body.rec button.abort{display:block;flex:0 0 auto;width:96px;background:transparent;color:var(--jrk);
+    border:1px solid var(--jrk);font-size:13px;font-weight:600;padding:10px 6px;line-height:1.25;white-space:pre-line}
+  button.mic{flex:0 0 auto;width:112px;background:var(--panel);color:var(--dim);border:1px solid var(--line);
+    font-size:12px;font-weight:500;padding:10px 6px;line-height:1.25;white-space:pre-line}
+  button.mic.on{background:var(--ok);color:var(--bg);border-color:var(--ok)}
+  button:disabled{opacity:.4}
+  button:focus-visible{outline:2px solid var(--vel);outline-offset:2px}
+  #msg{font-size:13px;color:var(--dim);min-height:18px;text-align:center}
+  #msg.ok{color:var(--ok)} #msg.err{color:var(--jrk)}
+  .lg{border:0;background:transparent;color:var(--dim);font-size:12px;padding:4px 6px;border-radius:6px;font-family:inherit;font-weight:500;opacity:.4}
+  .lg.on{opacity:1;color:var(--ink)}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+  .meta input{background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:8px;font-size:13px;font-family:inherit;min-width:0}
+  details .row button{border-radius:8px}
   #msg{order:0}
   /* 측정 중: 설정·부가 UI를 감추고 수치와 그래프만 남긴다 */
   body.rec .tabs, body.rec .trials, body.rec .legend, body.rec .row,
