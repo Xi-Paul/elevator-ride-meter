@@ -153,37 +153,6 @@
             </LinearLayout>
 
             <LinearLayout
-                android:tag="cfg"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="표시 축"
-                    android:textColor="#8D9AB0"
-                    android:textSize="11sp" />
-
-                <Spinner
-                    android:id="@+id/spAxis"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1" />
-
-                <CheckBox
-                    android:id="@+id/cbAutoDir"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:checked="true"
-                    android:text="방향 자동"
-                    android:textColor="#8D9AB0"
-                    android:textSize="11sp" />
-            </LinearLayout>
-
-            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
@@ -385,6 +354,56 @@
                 android:textColor="#E8EDF5"
                 android:textSize="12sp" />
 
+            <TextView
+                android:id="@+id/hdrOpt"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/panel_bg"
+                android:padding="10dp"
+                android:text="▸  측정 설정"
+                android:textColor="#8D9AB0"
+                android:textSize="13sp"
+                android:tag="cfg" />
+            <LinearLayout
+                android:id="@+id/boxOpt"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:tag="cfg">
+
+            <LinearLayout
+                android:tag="cfg"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="표시 축"
+                    android:textColor="#8D9AB0"
+                    android:textSize="11sp" />
+
+                <Spinner
+                    android:id="@+id/spAxis"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <CheckBox
+                    android:id="@+id/cbAutoDir"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="방향 자동"
+                    android:textColor="#8D9AB0"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
             <LinearLayout
                 android:tag="cfg"
                 android:layout_width="match_parent"
@@ -530,6 +549,26 @@
                 android:textColor="#8D9AB0"
                 android:textSize="11sp" />
 
+            </LinearLayout>
+            <TextView
+                android:id="@+id/hdrSum"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/panel_bg"
+                android:padding="10dp"
+                android:text="▸  시험 결과 요약"
+                android:textColor="#8D9AB0"
+                android:textSize="13sp"
+                android:tag="cfg" />
+            <LinearLayout
+                android:id="@+id/boxSum"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:tag="cfg">
+
             <TextView
                 android:tag="cfg"
                 android:id="@+id/tvSummary"
@@ -542,6 +581,26 @@
                 android:text="—"
                 android:textColor="#8D9AB0"
                 android:textSize="11sp" />
+
+            </LinearLayout>
+            <TextView
+                android:id="@+id/hdrInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/panel_bg"
+                android:padding="10dp"
+                android:text="▸  현장·리포트 정보"
+                android:textColor="#8D9AB0"
+                android:textSize="13sp"
+                android:tag="cfg" />
+            <LinearLayout
+                android:id="@+id/boxInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:tag="cfg">
 
             <TextView
                 android:tag="cfg"
@@ -753,6 +812,7 @@
                     android:text="좌표 없음"
                     android:textColor="#8D9AB0"
                     android:textSize="11sp" />
+            </LinearLayout>
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
