@@ -268,6 +268,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         tgFft.setOnClickListener(redraw)
 
         setMicUi()
+        // 접이식 섹션 — 기본은 접힌 상태, 머리글을 누르면 펼쳐진다
+        for ((h, b) in listOf(R.id.hdrOpt to R.id.boxOpt, R.id.hdrSum to R.id.boxSum, R.id.hdrInfo to R.id.boxInfo)) {
+            val head = findViewById<TextView>(h)
+            val body = findViewById<LinearLayout>(b)
+            head.setOnClickListener {
+                val open = body.visibility != View.VISIBLE
+                body.visibility = if (open) View.VISIBLE else View.GONE
+                head.text = (if (open) "▾  " else "▸  ") + head.text.toString().substring(3)
+            }
+        }
+
         val ver = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "dev" } catch (e: Exception) { "dev" }
         findViewById<TextView>(R.id.tvVer).text = "버전 $ver"
         findViewById<Button>(R.id.btnUpdate).setOnClickListener { Updater.check(this, true) { msg(it) } }
