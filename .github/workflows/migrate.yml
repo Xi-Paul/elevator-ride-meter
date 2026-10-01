@@ -1,7 +1,8 @@
 name: Migrate to monorepo
 
 # 통합 작업용 1회성 워크플로.
-# repo-payload.zip 을 풀어 새 구조를 만들고, 옛 파일과 자기 자신을 지운 뒤 커밋한다.
+# 주의: Actions 기본 토큰은 .github/workflows/ 아래 파일을 만들거나 고칠 수 없다.
+#       그래서 pages.yml 과 android.yml 은 사람이 직접 만들고, 이 워크플로는 .github/ 를 건드리지 않는다.
 on:
   push:
     branches: [ main ]
@@ -16,27 +17,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Skip if already migrated
+        id: guard
+        run: |
+          if [ -d web ] && [ -d android ] && [ ! -f repo-payload.zip ]; then
+            echo "이미 통합된 상태입니다. 할 일이 없습니다."
+            echo "skip=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=no" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Show current layout
+        if: steps.guard.outputs.skip == 'no'
         run: |
           echo "--- 통합 전 ---"
-          ls -la
           find . -path ./.git -prune -o -type f -print | sort
 
       - name: Unpack new structure
+        if: steps.guard.outputs.skip == 'no'
         run: |
           set -x
           if [ ! -f repo-payload.zip ]; then
-            echo "::error::루트에 repo-payload.zip 이 없습니다. 아래 목록을 확인하세요."
+            echo "::error::루트에 repo-payload.zip 이 없습니다."
             ls -la
             exit 1
           fi
           unzip -o repo-payload.zip -d .
           rm -f repo-payload.zip
-          echo "--- 압축 해제 직후 ---"
-          ls -la
-          ls -la web android .github/workflows || true
 
       - name: Remove old layout
+        if: steps.guard.outputs.skip == 'no'
         run: |
           set -x
           # 루트에 있던 웹 파일 (이제 web/ 아래로 이동)
@@ -46,15 +56,13 @@ jobs:
           # .github/ 없이 루트에 잘못 올라가 동작하지 않던 워크플로 파일·폴더
           rm -f build.yml pages.yml android.yml
           rm -rf workflows
-          # 예전 워크플로
-          rm -f .github/workflows/build.yml .github/workflows/stamp.yml
-          # 1회성 워크플로 자신도 제거 → 다시 실행되지 않는다
-          rm -f .github/workflows/migrate.yml
+          # .github/ 는 건드리지 않는다 (토큰 권한 밖)
           echo "--- 통합 후 ---"
           find . -path ./.git -prune -o -type f -print | sort
           echo "파일 수: $(find . -path ./.git -prune -o -type f -print | wc -l)"
 
       - name: Commit and push
+        if: steps.guard.outputs.skip == 'no'
         run: |
           set -x
           git config user.name  "github-actions[bot]"
@@ -62,9 +70,9 @@ jobs:
           git add -A
           git status --short
           if git diff --cached --quiet; then
-            echo "변경 없음 — 이미 통합된 상태입니다."
+            echo "변경 없음"
             exit 0
           fi
-          git commit -m "웹·안드로이드 저장소 통합 (web/, android/, 워크플로 분리)"
-          # 기본 토큰이 읽기 전용으로 설정된 저장소에서도 동작하도록 원격을 명시한다
+          git commit -m "웹·안드로이드 저장소 통합 (web/, android/)"
           git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:main
+          echo "완료. 이제 .github/workflows/migrate.yml 을 직접 삭제하세요."
